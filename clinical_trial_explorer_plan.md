@@ -110,17 +110,6 @@ To add a new map, create a new file in this folder. The API returns location as 
 
 ---
 
-## Implementation order
-
-1. Scaffold both `frontend/` and `backend/` with TypeScript
-2. Build the Express proxy in `backend/server.ts` — confirm it forwards CT.gov requests correctly
-3. Build `api/trials.ts` and `useTrials.ts` — confirm data flows frontend → backend → CT.gov → back
-4. Build `TrialTable.tsx` with search and expandable rows
-5. Add MapLibre, build `MapShell.tsx`
-6. Build `UsStatesMap.tsx` as the first map component
-
----
-
 ## Unit testing plan
 
 **Backend** — Jest + Supertest. Mock `https` so no real network calls are made.
@@ -136,3 +125,14 @@ One test file per module, one or two assertions each:
 - `hooks/useTrials.ts` — hook resolves with data on success, sets `isError` on failure.
 - `TrialTable.tsx` — given mock trials, rows render; typing in the search box filters them.
 - `UsStatesMap.tsx` — extract `aggregateByState` as a pure function and test the count logic directly (no rendering needed). Mock `MapShell` to avoid WebGL.
+
+---
+
+## Implementation order
+
+1. Scaffold both `frontend/` and `backend/` with TypeScript
+2. Build the Express proxy in `backend/server.ts` — confirm it forwards CT.gov requests correctly
+3. Build `api/trials.ts` and `useTrials.ts` — confirm data flows frontend → backend → CT.gov → back
+4. Build `TrialTable.tsx` with search and expandable rows
+5. Add MapLibre, build `MapShell.tsx`
+6. Build `UsStatesMap.tsx` as the first map component
