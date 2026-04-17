@@ -83,7 +83,7 @@ Key response fields per study (inside `protocolSection`):
 - `.statusModule.overallStatus`
 - `.designModule.phases[]`
 - `.conditionsModule.conditions[]`
-- `.contactsLocationsModule.locations[]` — array of `{ city, state, country, facility }`
+- `.contactsLocationsModule.locations[]` — array of `{ city, state, country, facility, geoPoint }`
 - `.descriptionModule.briefSummary`
 
 ---
@@ -91,12 +91,18 @@ Key response fields per study (inside `protocolSection`):
 ## Frontend components
 
 ### `TrialTable.tsx`
-- Text input to search by condition/keyword
-- Table columns: title, status, phase, conditions, location count
-- Click a row to expand: shows summary, all sites, eligibility
+- simple data explorer. Data will be a json with 
+```json
+{
+    nextPageToken: string
+    studies*: [{...}]
+    totalCount: integer
+}
+```
+- make a list with each study. make each study explorable, maybe by expansion
 
 ### `MapShell.tsx`
-- Thin wrapper around a MapLibre GL JS instance
+- Thin wrapper around a \ GL JS instance
 - Accepts `sources` and `layers` as props
 - All map components are built on top of this
 
@@ -106,7 +112,7 @@ Each map is a self-contained file that:
 2. Transforms the data (e.g. count trials per US state)
 3. Passes GeoJSON sources + MapLibre layer configs to `MapShell`
 
-To add a new map, create a new file in this folder. The API returns location as text strings (city, state, country) — no coordinates. The first map component matches state name strings against a bundled static US states GeoJSON file to render a choropleth.
+To add a new map, create a new file in this folder. The API returns coordinates. The first map component matches state name strings against a bundled static US states GeoJSON file to render a choropleth.
 
 ---
 

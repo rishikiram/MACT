@@ -1,0 +1,31 @@
+import type { FetchTrialsParams } from "./trials";
+
+// Actively recruiting Phase 2 diabetes trials, capped at 100 results
+export const RECRUITING_DIABETES: FetchTrialsParams = {
+  condition: "diabetes",
+  status: "RECRUITING",
+  phase: "PHASE2",
+  pageSize: 100,
+};
+
+// All oncology trials, ideally with location data
+export const ONCOLOGY: FetchTrialsParams = {
+  condition: "cancer",
+  // fields: ["protocolSection.contactsLocationsModule"] // Lets pull everything for now until we run into data issues
+  pageSize: 100,
+  // things to add later:
+  // US and EU
+  // Exclude studies not yet enrolling
+  // Exclude phase 1 studies
+};
+
+// All oncology trials, ideally with location data
+export const NSCLC: FetchTrialsParams = {
+  condition: "NSCLC OR non-small cell lung cancer",
+  // fields: ["protocolSection.contactsLocationsModule"] // Lets pull everything for now until we run into data issues
+  pageSize: 100,
+  // things to add later:
+  // US and EU
+  // Exclude studies not yet enrolling
+  // Exclude phase 1 studies
+};
