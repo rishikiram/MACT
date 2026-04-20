@@ -21,7 +21,8 @@ export interface FetchTrialsParams {
   condition?: string;
   term?: string;
   status?: string;
-  phase?: string;
+  // phase?: string;
+  filterAdvanced?: string; 
   pageSize?: number;
   pageToken?: string;
 }
@@ -38,9 +39,10 @@ export async function fetchTrials(
   if (params.condition) query.set("query.cond", params.condition);
   if (params.term) query.set("query.term", params.term);
   if (params.status) query.set("filter.overallStatus", params.status);
-  if (params.phase) query.set("filter.phase", params.phase);
+  // if (params.phase) query.set("filter.phase", params.phase);
   if (params.pageSize) query.set("pageSize", String(params.pageSize));
   if (params.pageToken) query.set("pageToken", params.pageToken);
+  if (params.filterAdvanced) query.set("filter.advanced", params.filterAdvanced);
 
   const res = await fetch(`/api/trials?${query.toString()}`);
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);

@@ -4,7 +4,7 @@ import type { FetchTrialsParams } from "./trials";
 export const RECRUITING_DIABETES: FetchTrialsParams = {
   condition: "diabetes",
   status: "RECRUITING",
-  phase: "PHASE2",
+  filterAdvanced: "PHASE2",
   pageSize: 100,
 };
 
