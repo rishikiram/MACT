@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useTrials } from "./hooks/useTrials";
+// import { useTrials } from "./hooks/useTrials";
+import { useAllTrials } from "./hooks/useAllTrials";
 import { TrialTable } from "./components/TrialTable";
 import { UsStatesMap } from "./components/maps/UsStatesMap";
 import { ONCOLOGY, NSCLC, RECRUITING_DIABETES } from "./api/queries";
@@ -13,7 +14,7 @@ const PRESETS: { label: string; params: FetchTrialsParams }[] = [
 
 export default function App() {
   const [selected, setSelected] = useState(0);
-  const { data, isLoading, isError } = useTrials(PRESETS[selected].params);
+  const { data, isLoading, isError } = useAllTrials(PRESETS[selected].params);
 
   const trials = data?.trials ?? [];
 

@@ -30,6 +30,7 @@ interface Props {
   center?: [number, number];
   zoom?: number;
   height?: string;
+  onLoad?: (map: maplibregl.Map) => void;
 }
 
 export function MapShell({
@@ -38,6 +39,7 @@ export function MapShell({
   center = [-96, 38],
   zoom = 3,
   height = "400px",
+  onLoad,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -54,6 +56,7 @@ export function MapShell({
     map.on("load", () => {
       sources.forEach(({ id, spec }) => map.addSource(id, spec));
       layers.forEach((layer) => map.addLayer(layer));
+      onLoad?.(map);
     });
 
     return () => map.remove();

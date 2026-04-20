@@ -3,10 +3,17 @@ import https from "https";
 import { PassThrough } from "stream";
 import app from "../server";
 
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
+
 jest.mock("https");
 const mockGet = https.get as jest.Mock;
 
-beforeAll(() => jest.spyOn(console, "error").mockImplementation(() => {}));
+beforeAll(() => {
+  jest.spyOn(console, "error").mockImplementation(() => {});
+  jest.spyOn(console, "log").mockImplementation(() => {});
+  jest.spyOn(console, "warn").mockImplementation(() => {});
+});
 afterAll(() => jest.restoreAllMocks());
 afterEach(() => jest.resetAllMocks());
 
@@ -42,6 +49,43 @@ describe("GET /api/trials", () => {
     }));
 
     const res = await request(app).get("/api/trials");
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBeDefined();
+  });
+});
+
+describe("GET /api/trials/all", () => {
+  it("paginates through all pages and returns combined studies", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ studies: [{ id: "NCT001" }], nextPageToken: "tok2" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ studies: [{ id: "NCT002" }] }), // no nextPageToken — last page
+      });
+
+    const res = await request(app).get("/api/trials/all?query.cond=diabetes");
+
+    expect(res.status).toBe(200);
+    expect(res.body.studies).toHaveLength(2);
+    expect(res.body.totalCount).toBe(2);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    const firstUrl: string = mockFetch.mock.calls[0][0];
+    expect(firstUrl).toContain("query.cond=diabetes");
+    expect(firstUrl).toContain("pageSize=1000");
+
+    const secondUrl: string = mockFetch.mock.calls[1][0];
+    expect(secondUrl).toContain("pageToken=tok2");
+  });
+
+  it("returns 502 when CT.gov returns an error status", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+
+    const res = await request(app).get("/api/trials/all?query.cond=diabetes");
 
     expect(res.status).toBe(502);
     expect(res.body.error).toBeDefined();

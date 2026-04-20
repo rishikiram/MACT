@@ -1,6 +1,8 @@
+import { useEffect, useRef } from "react";
+import maplibregl from "maplibre-gl";
 import type { Trial } from "../../api/trials";
 import { MapShell } from "./MapShell";
-import type { GeoJSONSourceSpecification, LayerSpecification } from "maplibre-gl";
+import type { GeoJSONSourceSpecification, GeoJSONSource, LayerSpecification } from "maplibre-gl";
 import statesGeoJSON from "../../assets/us-states.json";
 
 // Pure function — exported so it can be unit-tested without rendering
@@ -23,11 +25,9 @@ interface Props {
   trials: Trial[];
 }
 
-export function UsStatesMap({ trials }: Props) {
+function buildEnriched(trials: Trial[]) {
   const counts = aggregateByState(trials);
-
-  // Inject trialCount into each GeoJSON feature so MapLibre can use it directly
-  const enriched = {
+  return {
     ...statesGeoJSON,
     features: statesGeoJSON.features.map((feature) => ({
       ...feature,
@@ -37,6 +37,22 @@ export function UsStatesMap({ trials }: Props) {
       },
     })),
   };
+}
+
+export function UsStatesMap({ trials }: Props) {
+  const mapRef = useRef<maplibregl.Map | null>(null);
+
+  // When trials change after initial mount, push updated data into the existing source
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource("states") as GeoJSONSource | undefined;
+    if (source) {
+      source.setData(buildEnriched(trials) as GeoJSON.FeatureCollection);
+    }
+  }, [trials]);
+
+  const enriched = buildEnriched(trials);
 
   const source: GeoJSONSourceSpecification = {
     type: "geojson",
@@ -73,11 +89,42 @@ export function UsStatesMap({ trials }: Props) {
     },
   ];
 
+  function handleLoad(map: maplibregl.Map) {
+    mapRef.current = map;
+
+    const popup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+    });
+
+    map.on("mousemove", "states-fill", (e) => {
+      map.getCanvas().style.cursor = "pointer";
+      const feature = e.features?.[0];
+      if (!feature) return;
+      const { name, trialCount } = feature.properties as {
+        name: string;
+        trialCount: number;
+      };
+      popup
+        .setLngLat(e.lngLat)
+        .setHTML(
+          `<strong>${name}</strong><br/>${trialCount} trial${trialCount !== 1 ? "s" : ""}`
+        )
+        .addTo(map);
+    });
+
+    map.on("mouseleave", "states-fill", () => {
+      map.getCanvas().style.cursor = "";
+      popup.remove();
+    });
+  }
+
   return (
     <MapShell
       sources={[{ id: "states", spec: source }]}
       layers={layers}
       height="420px"
+      onLoad={handleLoad}
     />
   );
 }
