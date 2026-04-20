@@ -1,23 +1,12 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import type {
-  StyleSpecification,
   SourceSpecification,
   LayerSpecification,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-const BASE_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [
-    {
-      id: "background",
-      type: "background",
-      paint: { "background-color": "#e8ecf0" },
-    },
-  ],
-};
+const BASE_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
 export interface SourceEntry {
   id: string;

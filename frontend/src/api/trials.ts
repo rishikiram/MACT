@@ -5,6 +5,7 @@ export interface TrialLocation {
   state?: string;
   country?: string;
   facility?: string;
+  geoPoint?: { lat: number; lon: number };
 }
 
 export interface Trial {

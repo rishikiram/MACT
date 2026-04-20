@@ -51,42 +51,34 @@ React + Vite · TanStack Query · MapLibre GL JS · Node.js + Express · TypeScr
 
 # Things to Implement
 
-## making a dataset from a query
+## Scatter Map (`ScatterMap.tsx`)
 
-Adds a new `GET /api/trials/all` endpoint to the backend. It accepts the same query parameters as `/api/trials` but paginates through every page of CT.gov results and returns them combined in a single response.
+One point per trial site. Points are semi-transparent so dense clusters naturally appear more saturated. Hovering a point shows a popup with study details.
 
-### How it works
+### Data
 
-1. The frontend calls `/api/trials/all` with the same params used for single-page queries (condition, status, phase, etc.).
-2. The backend forces `pageSize=1000` (the maximum) and runs a pagination loop:
-   - Fetch page → accumulate `studies` array → check for `nextPageToken`
-   - If `nextPageToken` is present, repeat with `pageToken=<token>`
-   - Stop when no `nextPageToken` is returned
-3. Return `{ studies: [...all pages combined], totalCount: number }` as a single JSON response.
+Reuses `buildPoints` from `HeatMap.tsx` — same GeoJSON FeatureCollection of Points, one per location with a valid `geoPoint`. Extract `buildPoints` to a shared utility (e.g. `frontend/src/utils/geoPoints.ts`) so both maps import it.
 
-### Backend changes (`backend/server.ts`)
+### MapLibre layer config
 
-- Add a `fetchAllPages(baseParams: URLSearchParams)` async helper using Node's native `fetch` (Node 18+) — simpler than streaming `https.get` for JSON accumulation.
-- Register `GET /api/trials/all` as a new route that calls `fetchAllPages` and sends the combined result.
-- The existing `/api/trials` single-page route is unchanged.
-- Add a hard cap (e.g. 20 pages = 20,000 studies) to prevent runaway loops.
-- Log each page fetch to the console so progress is visible in the terminal.
+Layer type: `circle`.
 
-### Frontend changes (`frontend/src/api/trials.ts`)
+- `circle-radius` — fixed small size (e.g. 5px)
+- `circle-color` — single accent color (e.g. `#2171b5`)
+- `circle-opacity` — low (e.g. 0.25) so overlapping points compound visually
+- `circle-stroke-width` — 0 (no border keeps overlap clean)
 
-- Add a `fetchAllTrials(params)` function alongside the existing `fetchTrials` — calls `/api/trials/all` and returns the same `FetchTrialsResult` type.
-- Add a `useAllTrials(params)` hook in `hooks/` that wraps `fetchAllTrials` with TanStack Query.
-- Any preset in `queries.ts` that needs the full dataset (e.g. `ONCOLOGY`, `NSCLC`) can be passed to `useAllTrials` instead of `useTrials`.
+### Hover popup
 
-### Constraints
+On `mousemove` over the `scatter-points` layer, show a `maplibregl.Popup` with:
+- Trial title
+- Status
+- Facility name and city
 
-- The frontend waits for the full response before rendering — the existing `isLoading` state in `useAllTrials` already handles this. For large queries this could take several seconds.
-- `pageToken` should be stripped from any params passed to `/api/trials/all` since pagination is managed internally by the backend.
+Use the same `onLoad` + popup pattern as `UsStatesMap`.
 
-## make a scatter map
-- every study is given a point that is somewhat transparent. Dense points should overlap and create a more intense color.
-- hovering over a point should display some basic information about the study.
+### Component structure
 
-## make a heatmap
-- use mapbox gl js heatmap tool
+Same pattern as `HeatMap`: `buildPoints` for initial source data, `useEffect([trials])` calling `source.setData()` on updates, `onLoad` to store the map ref.
+
 
