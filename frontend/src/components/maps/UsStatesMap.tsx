@@ -42,16 +42,29 @@ function buildEnriched(trials: Trial[]) {
 export function UsStatesMap({ trials }: Props) {
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  // When trials change after initial mount, push updated data into the existing source
+  // When trials change after initial mount, push updated data and color scale into the map
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+
     const source = map.getSource("states") as GeoJSONSource | undefined;
     if (source) {
       source.setData(buildEnriched(trials) as GeoJSON.FeatureCollection);
     }
+
+    const max = Math.max(1, ...Object.values(aggregateByState(trials)));
+    map.setPaintProperty("states-fill", "fill-color", [
+      "interpolate", ["linear"], ["get", "trialCount"],
+      0,          "#f0f4f8",
+      max * 0.25, "#bdd7ea",
+      max * 0.5,  "#6aaed6",
+      max * 0.75, "#2171b5",
+      max,        "#084594",
+    ]);
   }, [trials]);
 
+  const counts = aggregateByState(trials);
+  const maxCount = Math.max(1, ...Object.values(counts));
   const enriched = buildEnriched(trials);
 
   const source: GeoJSONSourceSpecification = {
@@ -69,11 +82,11 @@ export function UsStatesMap({ trials }: Props) {
           "interpolate",
           ["linear"],
           ["get", "trialCount"],
-          0, "#f0f4f8",
-          10, "#bdd7ea",
-          25, "#6aaed6",
-          50, "#2171b5",
-          100, "#084594",
+          0,                      "#f0f4f8",
+          maxCount * 0.25,        "#bdd7ea",
+          maxCount * 0.5,         "#6aaed6",
+          maxCount * 0.75,        "#2171b5",
+          maxCount,               "#084594",
         ],
         "fill-opacity": 0.85,
       },

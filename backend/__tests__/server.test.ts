@@ -1,7 +1,7 @@
 import request from "supertest";
 import https from "https";
 import { PassThrough } from "stream";
-import app from "../server";
+import app, { clearCache } from "../server";
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -15,7 +15,10 @@ beforeAll(() => {
   jest.spyOn(console, "warn").mockImplementation(() => {});
 });
 afterAll(() => jest.restoreAllMocks());
-afterEach(() => jest.resetAllMocks());
+afterEach(async () => {
+  jest.resetAllMocks();
+  await clearCache();
+});
 
 describe("GET /api/trials", () => {
   it("forwards query params to CT.gov and pipes the response back", async () => {
@@ -89,5 +92,18 @@ describe("GET /api/trials/all", () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error).toBeDefined();
+  });
+
+  it("returns cached result on second request without calling CT.gov again", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ studies: [{ id: "NCT001" }] }),
+    });
+
+    await request(app).get("/api/trials/all?query.cond=diabetes");
+    await request(app).get("/api/trials/all?query.cond=diabetes");
+
+    // CT.gov should only have been called once despite two requests
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });

@@ -14,3 +14,6 @@ dist-ssr/
 # Local env files
 *.local
 .env
+
+# Backend disk cache
+backend/cache/
