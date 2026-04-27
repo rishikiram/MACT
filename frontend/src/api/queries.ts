@@ -17,6 +17,7 @@ export const ONCOLOGY: FetchTrialsParams = {
   // US and EU
   // Exclude studies not yet enrolling
   // Exclude phase 1 studies
+  // how to handle  exceptions ( null data, missing fields). Can I look up the missing information? such as missing lon/lat.
 };
 
 // All oncology trials, ideally with location data

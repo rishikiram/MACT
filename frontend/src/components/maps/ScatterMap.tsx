@@ -19,9 +19,29 @@ export function ScatterMap({ trials }: Props) {
     if (source) source.setData(buildPoints(trials));
   }, [trials]);
 
+  function jitter(points: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+    return {
+      ...points,
+      features: points.features.map((f) => {
+        const random_displacement = [(Math.sqrt(Math.random())) * 0.0002, (Math.random() * 2 * Math.PI)]; // Bias towards smaller displacements
+        const [lon, lat] = (f.geometry as GeoJSON.Point).coordinates;
+        return {
+          ...f,
+          geometry: {
+            type: "Point" as const,
+            coordinates: [
+              lon + random_displacement[0] * Math.cos(random_displacement[1]),
+              lat + random_displacement[0] * Math.sin(random_displacement[1]),
+            ],
+          },
+        };
+      }),
+    };
+  }
+
   const source: GeoJSONSourceSpecification = {
     type: "geojson",
-    data: buildPoints(trials),
+    data: jitter(buildPoints(trials)),
   };
 
   const layers: LayerSpecification[] = [
