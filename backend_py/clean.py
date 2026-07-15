@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 
 
 def clean_ctgov_study(raw: dict) -> dict | None:
-    has_results = raw.get("hasResults")
     ps = raw.get("protocolSection", {})
 
     nct_id = ps.get("identificationModule", {}).get("nctId")
@@ -82,7 +81,8 @@ def clean_ctgov_study(raw: dict) -> dict | None:
         #eligibilityModule
         "eligibility_criteria": eligibility_mod.get("eligibilityCriteria"),
         "healthy_volunteers": eligibility_mod.get("healthyVolunteers"), # true/false?
-        # "std_ages": eligibility_mod.get("stdAges"),
+        "sex": eligibility_mod.get("sex"),
+        "std_ages": json.dumps(eligibility_mod.get("stdAges", [])),
         #contactsLocationsModule
         "locations": json.dumps(locations),
         "multicountry": multicountry,

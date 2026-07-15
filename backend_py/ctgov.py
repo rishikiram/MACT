@@ -2,6 +2,8 @@ import hashlib
 import time
 import requests
 
+import backend_py.cache as cache
+
 CT_GOV_BASE = "https://clinicaltrials.gov/api/v2/studies"
 PAGE_CAP = 10  # max 10,000 studies per request
 
@@ -11,6 +13,12 @@ def fetch_all_nctids(params: dict) -> list[dict]:
 
 def fetch_all_pages(params: dict) -> list[dict]:
     """Fetch all paginated results from the CT.gov API for a given query."""
+    hash_ = hash_params(params)
+    cached = cache.cache_get(hash_)
+    if cached is not None:
+        print(f"[ctgov] cache hit: {hash_}")
+        return cached
+
     params = {**params, "pageSize": 1000}
     params.pop("pageToken", None)
 
@@ -43,6 +51,7 @@ def fetch_all_pages(params: dict) -> list[dict]:
     if page_token and page >= PAGE_CAP:
         print(f"[ctgov] WARNING: hit {PAGE_CAP}-page cap — results may be incomplete")
 
+    cache.cache_set(hash_, all_studies)
     return all_studies
 
 

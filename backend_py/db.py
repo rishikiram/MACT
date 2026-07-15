@@ -3,26 +3,26 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "clinical_trials.db"
 
-CLAIM_STATUS_ENUM: tuple = ("assumption", "unsupported", "partially supported", "supported")
-allowed_claim_status = ", ".join(f"'{s}'" for s in CLAIM_STATUS_ENUM)
-CLAIM_REVIEW_STATUS_ENUM: tuple = ("ai_draft", "needs_review", "accepted", "rejected", "revised")
-allowed_claim_review_status = ", ".join(f"'{s}'" for s in CLAIM_REVIEW_STATUS_ENUM)
-CLAIM_EO_TYPES_ENUM: tuple = ("comparator",)
 
-GAP_SEVERITY_ENUM: tuple = ("no data", "non-conclusive", "high", "medium", "low", "zero")
-allowed_gaps = ", ".join(f"'{s}'" for s in GAP_SEVERITY_ENUM)
 
 TABLES_SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS studies (
-    -- UID?
     nct_id                  TEXT PRIMARY KEY,
     title                   TEXT,
+    
     status                  TEXT,
     phase1                  BOOLEAN,
     phase2                  BOOLEAN,
     phase3                  BOOLEAN,
     phase4                  BOOLEAN,
     phase_text              TEXT,
+    enrollment              INTEGER,
+    enrollment_type         TEXT,
+    masking                 TEXT,
+    allocation              TEXT,
+    intervention_model      TEXT,
+    primary_purpose         TEXT,
+
     study_type              TEXT,
     start_date              TEXT,
     start_date_type         TEXT,
@@ -31,37 +31,28 @@ CREATE TABLE IF NOT EXISTS studies (
     completion_date         TEXT,
     completion_date_type    TEXT,
     last_update_post        TEXT,
+    
     sponsor                 TEXT,
     sponsor_class           TEXT,
+    
     conditions              TEXT,   -- JSON array
     condition_keywords      TEXT,   -- JSON array
+    
     interventions           TEXT,   -- JSON array
-    arm_groups              TEXT,   -- JSON array
-    enrollment              INTEGER,
-    enrollment_type         TEXT,
-    masking                 TEXT,
-    allocation              TEXT,
-    intervention_model      TEXT,
-    primary_purpose         TEXT,
+    arm_groups              TEXT,   -- JSON array -- TODO, sturcture data in comparators table
+
     eligibility_criteria    TEXT,
     healthy_volunteers      TEXT,
-    -- std_ages             TEXT,
+    sex                     TEXT,
+    std_ages                TEXT,   -- JSON array
+
     locations               TEXT,   -- JSON array of [facility, city, state, country, lat, lon]
     multicountry            BOOLEAN,
     primary_outcomes        TEXT,   -- JSON array
     secondary_outcomes      TEXT,   -- JSON array
+
     has_results             BOOLEAN,
     ingested_at             TEXT
-);
-
-CREATE TABLE IF NOT EXISTS sources (
-    id                      INTEGER PRIMARY KEY,
-    uid                     TEXT UNIQUE,
-    type                    TEXT,
-    title                   TEXT,
-    url                     TEXT,
-    how_to_recreate         TEXT,
-    target_evidence_types   TEXT   -- JSON array for now -- this is how im imagining a user programaticaly allowing the repo to build the EOs
 );
 
 CREATE TABLE IF NOT EXISTS queries (
@@ -70,45 +61,23 @@ CREATE TABLE IF NOT EXISTS queries (
     -- last_ingested           TEXT
 );
 
-CREATE TABLE IF NOT EXISTS evidence_objects (
+CREATE TABLE IF NOT EXISTS comparators (
     id                      INTEGER PRIMARY KEY,
-    uid                     TEXT UNIQUE,
-    nct_id                  TEXT, -- fk?
-    type                    TEXT, -- could be turned into a fk with a set of options
-    statement               TEXT, -- maybe this should be called content?
-    normalized_value        TEXT,
-    confidence              TEXT
+    uid                     TEXT,
+    nct_id                  TEXT,
+    regimen                 TEXT,
+    population_summary      TEXT, 
+    endpoint_summary        TEXT,
+    is_approved             BOOLEAN,
+    previous_version_id     INTEGER,
+    current_version_author  TEXT,
+
+    FOREIGN KEY (nct_id)
+        REFERENCES studies(nct_id),
+    FOREIGN KEY (previous_version_id)
+        REFERENCES comparators(id)
 );
 
-CREATE TABLE IF NOT EXISTS claims (
-    id                      INTEGER PRIMARY KEY,
-    uid                     TEXT UNIQUE,
-    type                    TEXT,
-    statement               TEXT,
-    support_status          TEXT CHECK (support_status IN ({allowed_claim_status})) DEFAULT '{CLAIM_STATUS_ENUM[0]}',
-    review_status           TEXT CHECK (review_status in ({allowed_claim_review_status})) DEFAULT '{CLAIM_REVIEW_STATUS_ENUM[1]}',
-    risk_note               TEXT
-);
-
-CREATE TABLE IF NOT EXISTS requirements (
-    id                      INTEGER PRIMARY KEY,
-    uid                     TEXT UNIQUE,
-    jurisdiction            TEXT,
-    domain                  TEXT, -- could be fk enum
-    requirement_text        TEXT
-    -- potential_gaps       TEXT  -- TODO, all gaps are manually created so tracking potential gaps doesn't help anything. 
-);
-
-CREATE TABLE IF NOT EXISTS gaps (
-    id                      INTEGER PRIMARY KEY,
-    uid                     TEXT UNIQUE,
-    requirement_id          INTEGER,
-    rationale               TEXT,
-    severity                TEXT CHECK (severity in ({allowed_gaps})),
-    recommended_action      TEXT,
-    FOREIGN KEY (requirement_id)
-        REFERENCES requirements(id)
-);
 """
 
 RELATIONSHIPS_SCHEMA = """
@@ -123,39 +92,7 @@ CREATE TABLE IF NOT EXISTS study_queries (
         REFERENCES queries(uid)
 );
 
--- Many-to-many sources to evidence  -- this might be unecessary, could be one-to-many (source-to-EOs)
-CREATE TABLE IF NOT EXISTS evidence_object_sources (
-    source_id               INTEGER,
-    evidence_object_id      INTEGER,
-    PRIMARY KEY (source_id, evidence_object_id),
-    FOREIGN KEY (source_id)
-        REFERENCES sources(id),
-    FOREIGN KEY (evidence_object_id)
-        REFERENCES evidence_objects(id)
-);
 
--- Many-to-many evidence to claims
-CREATE TABLE IF NOT EXISTS claim_evidence_objects (
-    claim_id                INTEGER,
-    evidence_object_id      INTEGER,
-    is_verified             BOOLEAN DEFAULT FALSE,
-    PRIMARY KEY (claim_id, evidence_object_id),
-    FOREIGN KEY (claim_id)
-        REFERENCES claims(id),
-    FOREIGN KEY (evidence_object_id)
-        REFERENCES evidence_objects(id)
-);
-
--- Many-to-many-to-many claims to gaps
-CREATE TABLE IF NOT EXISTS gap_claims (
-    claim_id                INTEGER,
-    gap_id                  INTEGER,
-    PRIMARY KEY (claim_id, gap_id),
-    FOREIGN KEY (claim_id)
-        REFERENCES claims(id),
-    FOREIGN KEY (gap_id)
-        REFERENCES gaps(id)
-);
 """
 
 
