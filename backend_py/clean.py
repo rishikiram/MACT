@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 
 
-def clean_ctgov_study(raw: dict) -> dict | None:
+def process_ctgov_study(raw: dict) -> dict | None:
     ps = raw.get("protocolSection", {})
 
     nct_id = ps.get("identificationModule", {}).get("nctId")
@@ -95,10 +95,10 @@ def clean_ctgov_study(raw: dict) -> dict | None:
     }
 
 
-def clean_ctgov_studies(raw_studies: list[dict]) -> tuple[list[dict], int]:
+def process_ctgov_studies(raw_studies: list[dict]) -> tuple[list[dict], int]:
     cleaned, dropped = [], 0
     for raw in raw_studies:
-        row = clean_ctgov_study(raw)
+        row = process_ctgov_study(raw)
         if row is None:
             dropped += 1
         else:

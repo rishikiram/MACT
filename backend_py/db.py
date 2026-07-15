@@ -1,4 +1,5 @@
 import sqlite3
+import datetime
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "clinical_trials.db"
@@ -57,8 +58,8 @@ CREATE TABLE IF NOT EXISTS studies (
 
 CREATE TABLE IF NOT EXISTS queries (
     uid                     TEXT PRIMARY KEY,
-    text                    TEXT
-    -- last_ingested           TEXT
+    text                    TEXT,
+    datetime_ingested       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS comparators (
@@ -117,6 +118,27 @@ def init_db() -> None:
         cursor.executescript(RELATIONSHIPS_SCHEMA)
     print(f"[db] initialized at {DB_PATH}")
 
+def insert_queries(conn, queries: list[dict]) -> int:
+    # Each dict: {uid, text}
+    allowed_cols = ("uid", "text")
+    crsr = conn.cursor()
+    for query in queries:
+        row = {k: query[k] for k in allowed_cols if k in query}
+        row["datetime_ingested"] = str(datetime.datetime.now())
+        cols = ", ".join(row.keys())
+        placeholders = ", ".join(f":{k}" for k in row.keys()) 
+        crsr.execute(
+            f"""
+            INSERT INTO queries ({cols})
+            VALUES ({placeholders})
+            ON CONFLICT(uid) DO UPDATE SET 
+                text = excluded.text, 
+                datetime_ingested = excluded.datetime_ingested;
+            """,
+            row,
+        )
+    return len(queries)
+
 def upsert_studies(conn, studies: list[dict], query: dict) -> int:
     # query requires {"uid": "...", "text": "..."}
     crsr = conn.cursor()
@@ -144,205 +166,34 @@ def upsert_studies(conn, studies: list[dict], query: dict) -> int:
     crsr.close()
     return len(studies)
 
-def insert_queries(conn, queries: list[dict]) -> int:
+def insert_comparators(conn, comparators: list[dict]) -> int:
     # Each dict: {uid, text}
-    allowed_cols = ("uid", "text")
+    allowed_cols = ("uid", "nct_id", "regimen", "population_summary", "endpoint_summary", "is_approved", "previous_version_id", "current_version_author", )
     crsr = conn.cursor()
-    for query in queries:
-        row = {k: query[k] for k in allowed_cols if k in query}
+    for comparator in comparators:
+        row = {k: comparator[k] for k in allowed_cols if k in comparator}
         cols = ", ".join(row.keys())
-        placeholders = ", ".join(f":{k}" for k in row.keys())
+        placeholders = ", ".join(f":{k}" for k in row.keys()) 
         crsr.execute(
             f"""
-            INSERT INTO queries ({cols})
-            VALUES ({placeholders})
-            ON CONFLICT(uid) DO UPDATE SET text = excluded.text;
-            """,
-            row,
-        )
-    return len(queries)
-
-def insert_sources(conn, sources: list[dict]) -> int:
-    allowed_cols = ("uid", "type", "title", "url", "target_evidence_types", "how_to_recreate")
-    crsr = conn.cursor()
-    for source in sources:
-        row = {k: source[k] for k in allowed_cols if k in source}
-        cols = ", ".join(row.keys())
-        placeholders = ", ".join(f":{k}" for k in row.keys())
-        crsr.execute(
-            f"""
-            INSERT INTO sources ({cols})
-            VALUES ({placeholders});
-            """,
-            row,
-        )
-    return len(sources)
-
-def insert_and_link_EOs(conn, evidence_objs: list[dict]) -> list:
-    # Each dict: {uid, type, statement, normalized_value, confidence, source_uids: [...]}
-    allowed_cols = ("uid", "type", "statement", "nct_id", "normalized_value", "confidence")
-    crsr = conn.cursor()
-    eo_ids = [-1] * len(evidence_objs)
-    i = 0
-    for eo in evidence_objs:
-        row = {k: eo[k] for k in allowed_cols if k in eo}
-        cols = ", ".join(row.keys())
-        placeholders = ", ".join(f":{k}" for k in row.keys())
-        crsr.execute(
-            f"INSERT INTO evidence_objects ({cols}) VALUES ({placeholders}) RETURNING id;",
-            row,
-        )
-        eo_id = crsr.fetchall()[0][0]
-        eo_ids[i] = eo_id
-        i+=1
-        for source_uid in eo.get("source_uids", []):
-            source_id = get_id(conn, "sources", source_uid)
-            crsr.execute(
-                """
-                INSERT OR IGNORE INTO evidence_object_sources (
-                    source_id, evidence_object_id
-                ) VALUES (?, ?)
-                """,
-                (source_id, eo_id),
-            )
-    return eo_ids
-
-def insert_claims(conn, claims: list[dict]) -> int:
-    # Each dict: {uid, statement, support_status, review_status, risk_note,}
-    allowed_cols = ("uid", "statement", "type", "support_status", "review_status", "risk_note")
-    crsr = conn.cursor()
-    for claim in claims:
-        row = {k: claim[k] for k in allowed_cols if k in claim}
-        cols = ", ".join(row.keys())
-        placeholders = ", ".join(f":{k}" for k in row.keys())
-        crsr.execute(
-            f"""
-            INSERT INTO claims ({cols})
+            INSERT INTO comparators ({cols})
             VALUES ({placeholders})
             """,
             row,
         )
-    return len(claims)
+    return len(comparators)
 
-def link_EOs_to_claims_of_type(conn, eo_ids: list, claim_type: str) -> int:
-    cursor = conn.cursor()
-    temp = query("SELECT id FROM claims WHERE type = ?", (claim_type,), conn=conn)
-    claim_ids = [row[0] for row in temp]
-    i = 0
-    for eo_id in eo_ids:
-        for claim_id in claim_ids:
-            cursor.execute(
-                    """
-                    INSERT OR IGNORE INTO claim_evidence_objects (
-                        evidence_object_id, claim_id
-                    ) VALUES (?, ?)
-                    """,
-                    (eo_id, claim_id)
-                )
-            i += 1
-    return i
-
-def insert_and_link_claims(conn, claims: list[dict]) -> int:
-    # Each dict: {uid, statement, status, risk_note, evidence_object_uids: [...]}
-    insert_claims(conn, claims)
-    crsr = conn.cursor()
-    for claim in claims:
-        claim_id = get_id(conn, "claims", claim["uid"])
-        for eo_uid in claim.get("evidence_object_uids", []):
-            eo_id = get_id(conn, "evidence_objects", eo_uid)
-            crsr.execute(
-                """
-                INSERT INTO claim_evidence_objects (
-                    claim_id, evidence_object_id
-                ) VALUES (?, ?)
-                """,
-                (claim_id, eo_id),
-            )
-    return len(claims)
-
-def insert_requirements(conn, requirements: list[dict]) -> int:
-    # TODO: shift pk generation to RDBM, and enable row replacement
-    # Each dict: {uid, jurisdiction, domain, requirement_text}
-    allowed_cols = [col_dict["name"] for col_dict in get_table_columns(conn, "requirements")]
-    crsr = conn.cursor()
-    for req in requirements:
-        row = {k: req[k] for k in allowed_cols if k in req}
-        cols = ", ".join(row.keys())
-        placeholders = ", ".join(f":{k}" for k in row.keys())
-        crsr.execute(
-            f"""
-            INSERT INTO requirements ({cols})
-            VALUES ({placeholders})
-            """,
-            row,
-        )
-    return len(requirements)
-
-def insert_and_link_gaps(conn, gaps: list[dict]) -> int:
-    # allowed_cols = ('uid', 'type', 'jurisdiction', 'rationale', 'severity', 'recommended_action')
-    allowed_cols = [col_dict["name"] for col_dict in get_table_columns(conn, "gaps")]
-    crsr = conn.cursor()
-    for gap in gaps:
-        row = {k: gap[k] for k in allowed_cols if k in gap}
-
-        if "requirement_uid" in gap:
-            row["requirement_id"] = get_id(conn, "requirements", gap["requirement_uid"])
-
-        cols = ", ".join(row.keys())
-        placeholders = ", ".join(f":{k}" for k in row.keys())
-        crsr.execute(
-            f"""
-            INSERT INTO gaps ({cols})
-            VALUES ({placeholders})
-            """,
-            row,
-        )
-        
-        for claim_uid in gap["claim_uids"]:
-            claim_id = get_id(conn, "claims", claim_uid)
-            gap_id = get_id(conn, "gaps", gap["uid"])
-            crsr.execute(
-                """
-                INSERT OR IGNORE INTO gap_claims (
-                    claim_id, gap_id
-                ) VALUES (?, ?)
-                """,
-                (claim_id, gap_id),
-            )
-    return len(gaps)
-
-def update_gap(conn, gap) -> None:
-    allowed_cols = [col_dict["name"] for col_dict in get_table_columns(conn, "gaps")]
-    crsr = conn.cursor()
-    row = {k: gap[k] for k in allowed_cols if k in gap}
-
-    if "requirement_uid" in gap:
-        row["requirement_id"] = get_id(conn, "requirements", gap["requirement_uid"])
-
-    col_keys = ", ".join(f"{k} = :{k}" for k in row.keys())
-    crsr.execute(
-        f"""
-        UPDATE gaps SET {col_keys} 
-        WHERE uid = :uid
-        """,
-        row,
-    )
-
-def query(sql: str, params: tuple = (), conn = connect()) -> list[sqlite3.Row]:
+def query(conn, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
     # TODO, does this cause a connection to never close?
     cursor = conn.cursor()
     cursor.execute(sql, params)
     return cursor.fetchall()
-# def query(sql: str, params: tuple = ()) -> list[sqlite3.Row]:
-#     # TODO, does this cause a connection to never close?
-#     with connect() as conn:
-#         cursor = conn.cursor()
-#         cursor.execute(sql, params)
-#         return cursor.fetchall()
-
 
 def count(table = "studies") -> int:
-    return query(f"SELECT COUNT(*) FROM {table}")[0][0]
+    with connect() as conn:
+        to_return  = query(conn, f"SELECT COUNT(*) FROM {table}")[0][0]
+        conn.close()
+    return to_return
 
 
 def get_table_columns(conn, table_name: str) -> list[dict]:
@@ -358,7 +209,7 @@ def get_table_columns(conn, table_name: str) -> list[dict]:
 
 def get_id(conn, table_name, uid) -> int:
     # NOTE: security risk, can be improved later
-    return query(f"SELECT id FROM {table_name} WHERE uid = ?", params = (uid,), conn = conn)[0][0]
+    return query(conn, f"SELECT id FROM {table_name} WHERE uid = ?", params = (uid,))[0][0]
 
 def build_data_dictionary(table_name: str = "studies") -> None:
     """

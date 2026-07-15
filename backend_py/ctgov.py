@@ -54,7 +54,6 @@ def fetch_all_pages(params: dict) -> list[dict]:
     cache.cache_set(hash_, all_studies)
     return all_studies
 
-
 def hash_params(params: dict) -> str:
     sorted_str = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     return hashlib.md5(sorted_str.encode()).hexdigest()
