@@ -2,13 +2,13 @@ import json
 from datetime import datetime, timezone
 
 
-def process_ctgov_study(raw: dict) -> dict | None:
+def process_ctgov_study(raw: dict) -> dict:
     ps = raw.get("protocolSection", {})
 
     nct_id = ps.get("identificationModule", {}).get("nctId")
     title = ps.get("identificationModule", {}).get("briefTitle")
     if not nct_id or not title:
-        return None
+        return {"error": "no nct_id or title"}
 
     status_mod = ps.get("statusModule", {})
     design_mod = ps.get("designModule", {})
@@ -47,6 +47,7 @@ def process_ctgov_study(raw: dict) -> dict | None:
     return {
         "nct_id": nct_id,
         "title": title,
+        
         #statusModule
         "status": status_mod.get("overallStatus"),
         "start_date": (status_mod.get("startDateStruct") or {}).get("date"),
@@ -56,15 +57,15 @@ def process_ctgov_study(raw: dict) -> dict | None:
         "completion_date": (status_mod.get("completionDateStruct") or {}).get("date"),
         "completion_date_type": status_mod.get("completionDateStruct", {}).get("type"),
         "last_update_post": status_mod.get("lastUpdatePostDateStruct", {}).get("date"),
+        
         #sponsorCollaboratorsModule
         "sponsor": sponsor_mod.get("leadSponsor", {}).get("name"),
         "sponsor_class": sponsor_mod.get("leadSponsor", {}).get("class"),
+        
         #conditionsModule
         "conditions": json.dumps(conditions_mod.get("conditions") or []),
         "condition_keywords": json.dumps(conditions_mod.get("keywords") or []),
-        #armsInterventionsModule
-        "interventions": json.dumps(arms_mod.get("interventions", [])),
-        "arm_groups": json.dumps(arms_mod.get("armGroups", [])),
+        
         #designModule
         "phase1": phase1,
         "phase2": phase2,
@@ -78,14 +79,17 @@ def process_ctgov_study(raw: dict) -> dict | None:
         "allocation": design_info.get("allocation"),
         "intervention_model": design_info.get("interventionModel"),
         "primary_purpose": design_info.get("primaryPurpose"),
+        
         #eligibilityModule
         "eligibility_criteria": eligibility_mod.get("eligibilityCriteria"),
         "healthy_volunteers": eligibility_mod.get("healthyVolunteers"), # true/false?
         "sex": eligibility_mod.get("sex"),
         "std_ages": json.dumps(eligibility_mod.get("stdAges", [])),
+        
         #contactsLocationsModule
         "locations": json.dumps(locations),
         "multicountry": multicountry,
+        
         #outcomesModule
         "primary_outcomes": json.dumps(outcomes_mod.get("primaryOutcomes", [])),
         "secondary_outcomes": json.dumps(outcomes_mod.get("secondaryOutcomes", [])),
@@ -94,13 +98,38 @@ def process_ctgov_study(raw: dict) -> dict | None:
         "ingested_at": datetime.now(timezone.utc).isoformat(),
     }
 
+def process_ctgov_comparators(raw: dict) -> list[dict]:
+    comparator_rows = []
+    ps = raw.get("protocolSection", {})
+    arms = ps.get("armsInterventionsModule", {}).get("armGroups", {})
+    outcomes = raw.get("resultsSection", {}).get("outcomeMeasuresModule", {}).get("outcomeMeasures", [])
+    outcome_summary = [j["title"] for j in outcomes if j["type"] == "PRIMARY"] # TODO error here, 
+    
+    nct_id = ps.get("identificationModule", {}).get("nctId")
+    idx = 0
+    for arm in arms:
+        comparator_rows.append({
+            "uid":      f"COMP-{nct_id}-{idx}",
+            "nct_id":   nct_id,
+            "title":	arm.get("label", "no data"),
+            "type":	    arm.get("type", "no data"),
+            "regimen":	arm.get("description", "no data"),
+            "interventions":    json.dumps(arm.get("interventionNames", [])),
+            "population_summary":   ps.get("eligibilityModule", {}).get("eligibilityCriteria", "no data"),
+            "endpoint_summary":     json.dumps(outcome_summary)
+        })
+        idx += 1
+    return comparator_rows
 
-def process_ctgov_studies(raw_studies: list[dict]) -> tuple[list[dict], int]:
-    cleaned, dropped = [], 0
-    for raw in raw_studies:
-        row = process_ctgov_study(raw)
-        if row is None:
-            dropped += 1
-        else:
-            cleaned.append(row)
-    return cleaned, dropped
+
+# def process_ctgov_studies(raw_studies: list[dict]) -> tuple[list[dict], int]:
+#     cleaned, dropped = [], 0
+#     for raw in raw_studies:
+#         row = process_ctgov_study(raw)
+#         if row is None:
+#             dropped += 1
+#         else:
+#             cleaned.append(row)
+#     return cleaned, dropped
+
+

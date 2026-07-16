@@ -1,4 +1,7 @@
+import json
+
 import backend_py.aact_ctti as aact
+import backend_py.ctgov as ctgov
 import backend_py.db as db
 
 def get_nctids(conn, query_uid: str) -> list[str]:
@@ -15,6 +18,7 @@ def get_nctids(conn, query_uid: str) -> list[str]:
     r = [row[0] for row in cursor.fetchall()]
     cursor.close()
     return r
+
 
 GROUP_TYPES = ("ACTIVE_COMPARATOR", "EXPERIMENTAL", "NO_INTERVENTION", "OTHER", "PLACEBO_COMPARATOR", "SHAM_COMPARATOR")
 

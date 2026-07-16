@@ -1,5 +1,6 @@
 import sqlite3
 import datetime
+import json
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "clinical_trials.db"
@@ -38,9 +39,6 @@ CREATE TABLE IF NOT EXISTS studies (
     
     conditions              TEXT,   -- JSON array
     condition_keywords      TEXT,   -- JSON array
-    
-    interventions           TEXT,   -- JSON array
-    arm_groups              TEXT,   -- JSON array -- TODO, sturcture data in comparators table
 
     eligibility_criteria    TEXT,
     healthy_volunteers      TEXT,
@@ -58,18 +56,21 @@ CREATE TABLE IF NOT EXISTS studies (
 
 CREATE TABLE IF NOT EXISTS queries (
     uid                     TEXT PRIMARY KEY,
-    text                    TEXT,
-    datetime_ingested       TEXT
+    text                    TEXT    -- JSON array
+    -- datetime_ingested       TEXT    -- removed because this should be the dt of the ctgov query, not the ingestion into this database
 );
 
 CREATE TABLE IF NOT EXISTS comparators (
     id                      INTEGER PRIMARY KEY,
     uid                     TEXT,
     nct_id                  TEXT,
+    title                   TEXT,
+    type                    TEXT,
     regimen                 TEXT,
+    interventions           TEXT, -- JSON array
     population_summary      TEXT, 
     endpoint_summary        TEXT,
-    is_approved             BOOLEAN,
+    is_approved             BOOLEAN DEFAULT FALSE,
     previous_version_id     INTEGER,
     current_version_author  TEXT,
 
@@ -124,7 +125,7 @@ def insert_queries(conn, queries: list[dict]) -> int:
     crsr = conn.cursor()
     for query in queries:
         row = {k: query[k] for k in allowed_cols if k in query}
-        row["datetime_ingested"] = str(datetime.datetime.now())
+        # row["datetime_ingested"] = str(datetime.datetime.now())
         cols = ", ".join(row.keys())
         placeholders = ", ".join(f":{k}" for k in row.keys()) 
         crsr.execute(
@@ -132,23 +133,19 @@ def insert_queries(conn, queries: list[dict]) -> int:
             INSERT INTO queries ({cols})
             VALUES ({placeholders})
             ON CONFLICT(uid) DO UPDATE SET 
-                text = excluded.text, 
-                datetime_ingested = excluded.datetime_ingested;
+                -- datetime_ingested = excluded.datetime_ingested,
+                text = excluded.text;
             """,
             row,
         )
+    crsr.close()
     return len(queries)
 
 def upsert_studies(conn, studies: list[dict], query: dict) -> int:
     # query requires {"uid": "...", "text": "..."}
+    # insert_queries(conn, [query])
+
     crsr = conn.cursor()
-    crsr.execute(
-        """
-        INSERT INTO queries (uid, text) VALUES (:uid, :text)
-        ON CONFLICT(uid) DO UPDATE SET text = excluded.text; -- add datetime of text update
-        """,
-        query
-    )
     for study in studies:
         cols = ", ".join(study.keys())
         placeholders = ", ".join(f":{k}" for k in study.keys())
@@ -168,7 +165,7 @@ def upsert_studies(conn, studies: list[dict], query: dict) -> int:
 
 def insert_comparators(conn, comparators: list[dict]) -> int:
     # Each dict: {uid, text}
-    allowed_cols = ("uid", "nct_id", "regimen", "population_summary", "endpoint_summary", "is_approved", "previous_version_id", "current_version_author", )
+    allowed_cols = ("uid", "nct_id", "title", "interventions", "regimen", "population_summary", "endpoint_summary", "is_approved", "previous_version_id", "current_version_author")
     crsr = conn.cursor()
     for comparator in comparators:
         row = {k: comparator[k] for k in allowed_cols if k in comparator}
@@ -181,20 +178,21 @@ def insert_comparators(conn, comparators: list[dict]) -> int:
             """,
             row,
         )
+    crsr.close()
     return len(comparators)
 
 def query(conn, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
-    # TODO, does this cause a connection to never close?
     cursor = conn.cursor()
     cursor.execute(sql, params)
-    return cursor.fetchall()
+    to_return = cursor.fetchall()
+    cursor.close()
+    return to_return
 
 def count(table = "studies") -> int:
     with connect() as conn:
         to_return  = query(conn, f"SELECT COUNT(*) FROM {table}")[0][0]
-        conn.close()
+    conn.close()
     return to_return
-
 
 def get_table_columns(conn, table_name: str) -> list[dict]:
     """
@@ -210,6 +208,10 @@ def get_table_columns(conn, table_name: str) -> list[dict]:
 def get_id(conn, table_name, uid) -> int:
     # NOTE: security risk, can be improved later
     return query(conn, f"SELECT id FROM {table_name} WHERE uid = ?", params = (uid,))[0][0]
+
+# def get_query_params(conn, query_uid) -> dict:
+#     text = query(conn, "SELECT text FROM queries WHERE uid = ?", (query_uid,))[0][0]
+#     return json.loads(text)
 
 def build_data_dictionary(table_name: str = "studies") -> None:
     """
