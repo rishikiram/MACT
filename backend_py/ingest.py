@@ -39,8 +39,8 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
         # run verification function here
         study = clean.process_ctgov_study(raw)
         db.upsert_studies(conn, [study], query)
-        comparator_arms = clean.process_ctgov_comparator_arms(raw)
-        db.insert_comparator_arms(conn, comparator_arms)
+        all_groups = clean.process_all_groups(raw)
+        db.insert_comparator_groups(conn, all_groups)
 
         # population = process_ctgov_population
         # outcomes = process_ctgov_outcomes
@@ -51,7 +51,7 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
     
 # ----------------
 
-# def ingest_comparator_arms(ctgov_queries: list, must_have_results=False):
+# def ingest_comparator_groups(ctgov_queries: list, must_have_results=False):
 #     if not os.path.isfile(db.DB_PATH):
 #         # ingest sources
 #         print("Using queries: ", ctgov_queries)

@@ -60,28 +60,29 @@ CREATE TABLE IF NOT EXISTS queries (
     -- datetime_ingested       TEXT    -- removed because this should be the dt of the ctgov query, not the ingestion into this database
 );
 
-CREATE TABLE IF NOT EXISTS comparator_arms (
+CREATE TABLE IF NOT EXISTS comparator_groups ( -- comparator_groups
     id                      INTEGER PRIMARY KEY,
     uid                     TEXT,
     nct_id                  TEXT,
+    group_code              TEXT,
     title                   TEXT,
     type                    TEXT,
     regimen                 TEXT,
     interventions           TEXT, -- JSON array
     population_summary      TEXT, 
     endpoint_summary        TEXT,
+    data_source             TEXT, -- should be in [design_arm, outcome_group, event_group]. redundant with group code techincally
 
     is_approved             BOOLEAN DEFAULT FALSE,
-    -- doubly linked list to track expert updated versions. Most current should have next_version_id == NULL, 
-    previous_version_id     INTEGER DEFAULT NULL,
+        -- inked list to track edits or combine redundant groups. Most current should have next_version_id == NULL, 
     next_version_id         INTEGER DEFAULT NULL,
-    current_version_author  TEXT,
+    current_version_author  TEXT,   -- not sure this is necessary
 
-    UNIQUE(nct_id, title, previous_version_id), -- does not allow branching of version trees. NOTE this constrains concurrent users.
+    UNIQUE(nct_id, group_code, next_version_id), -- allows multiple versions per group_code.
     FOREIGN KEY (nct_id)
         REFERENCES studies(nct_id),
-    FOREIGN KEY (previous_version_id)
-        REFERENCES comparator_arms(id)
+    FOREIGN KEY (next_version_id)
+        REFERENCES comparator_groups(id)
 );
 
 CREATE TABLE IF NOT EXISTS outcomes (
@@ -92,7 +93,6 @@ CREATE TABLE IF NOT EXISTS outcomes (
     type                    TEXT,
     description             TEXT,
 
-
     FOREIGN KEY (nct_id)
         REFERENCES studies(nct_id)
 );
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS adverse_events (
     term                    TEXT NOT NULL,
     organ_system            TEXT,
     source_vocabulary       TEXT,
-    assessment_type          TEXT,
+    assessment_type         TEXT,
 
     UNIQUE(term, organ_system, source_vocabulary, assessment_type)
 );
@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS study_queries (
 );
 
 CREATE TABLE IF NOT EXISTS reported_events (
-    comparator_arm_id       INTEGER,
+    comparator_group_id       INTEGER,
     adverse_event_id        INTEGER,
     num_events              INTEGER,
     num_affected            INTEGER,
@@ -131,9 +131,9 @@ CREATE TABLE IF NOT EXISTS reported_events (
     is_serious_event        BOOLEAN, -- this is an important distinction
     is_info_verified        BOOLEAN,
 
-    PRIMARY KEY (comparator_arm_id, adverse_event_id),
-    FOREIGN KEY (comparator_arm_id)
-        REFERENCES comparator_arms(id),
+    PRIMARY KEY (comparator_group_id, adverse_event_id),
+    FOREIGN KEY (comparator_group_id)
+        REFERENCES comparator_groups(id),
     FOREIGN KEY (adverse_event_id)
         REFERENCES adverse_events(id)
 );
@@ -205,23 +205,23 @@ def upsert_studies(conn, studies: list[dict], query: dict) -> int:
     crsr.close()
     return len(studies)
 
-def insert_comparator_arms(conn, comparator_arms: list[dict]) -> int:
+def insert_comparator_groups(conn, comparator_groups: list[dict]) -> int:
     # Each dict: {uid, text}
-    allowed_cols = ("uid", "nct_id", "title", "interventions", "regimen", "population_summary", "endpoint_summary", "is_approved", "previous_version_id", "current_version_author")
+    allowed_cols = ("uid", "nct_id", "group_code", "title", "interventions", "regimen", "population_summary", "endpoint_summary", "is_approved", "next_version_id", "current_version_author")
     crsr = conn.cursor()
-    for comparator in comparator_arms:
+    for comparator in comparator_groups:
         row = {k: comparator[k] for k in allowed_cols if k in comparator}
         cols = ", ".join(row.keys())
         placeholders = ", ".join(f":{k}" for k in row.keys()) 
         crsr.execute(
             f"""
-            INSERT INTO comparator_arms ({cols})
+            INSERT INTO comparator_groups ({cols})
             VALUES ({placeholders})
             """,
             row,
         )
     crsr.close()
-    return len(comparator_arms)
+    return len(comparator_groups)
 
 def insert_outcomes(conn, outcomes: list[dict]) -> int:
     # Each dict: {uid, text}
@@ -243,7 +243,7 @@ def insert_outcomes(conn, outcomes: list[dict]) -> int:
 
 def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_title: str) -> int:
     #finds the most recent arm row id (based on title and nct_id)
-    most_recent_arm_id = query(conn, "SELECT id FROM comparator_arms WHERE nct_id = ? AND title = ? AND next_version_id = NULL", (nct_id, arm_title))[0][0]
+    most_recent_arm_id = query(conn, "SELECT id FROM comparator_groups WHERE nct_id = ? AND title = ? AND next_version_id = NULL", (nct_id, arm_title))[0][0]
     
     # Each e dict: {term, organ_system, source_vocabulary, assessment_type, num_events, num_affected, num_at_risk, is_serious_event}
     allowed_cols_ae = ("term", "organ_system", "source_vocabulary", "assessment_type")
@@ -275,7 +275,7 @@ def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_ti
         ae_id = crsr.fetchall()[0][0]
 
         row2 = {k: e.get(k) for k in allowed_cols_re}
-        row2["comparator_arm_id"] = most_recent_arm_id
+        row2["comparator_group_id"] = most_recent_arm_id
         row2["adverse_event_id"] = ae_id
         cols2 = ", ".join(row.keys())
         placeholders2 = ", ".join(f":{k}" for k in row.keys())

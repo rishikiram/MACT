@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone
 
+NO_DATA_VALUE = "no data"
 
 def process_ctgov_study(raw: dict) -> dict:
     ps = raw.get("protocolSection", {})
@@ -98,8 +99,9 @@ def process_ctgov_study(raw: dict) -> dict:
         "ingested_at": datetime.now(timezone.utc).isoformat(),
     }
 
-def process_ctgov_comparator_arms(raw: dict) -> list[dict]:
-    comparator_arm_rows = []
+# Scrape Groups
+def process_ctgov_arm_groups(raw: dict) -> list[dict]:
+    arm_group_rows = []
     ps = raw.get("protocolSection", {})
     arms = ps.get("armsInterventionsModule", {}).get("armGroups", {})
     outcomes = raw.get("resultsSection", {}).get("outcomeMeasuresModule", {}).get("outcomeMeasures", [])
@@ -108,18 +110,119 @@ def process_ctgov_comparator_arms(raw: dict) -> list[dict]:
     nct_id = ps.get("identificationModule", {}).get("nctId")
     idx = 0
     for arm in arms:
-        comparator_arm_rows.append({
+        arm_group_rows.append({
             "uid":      f"COMP-{nct_id}-{idx}",
             "nct_id":   nct_id,
+            "group_code":   f"ARM{idx:03d}", 
             "title":	arm.get("label", "no data"),
             "type":	    arm.get("type", "no data"),
             "regimen":	arm.get("description", "no data"),
             "interventions":    json.dumps(arm.get("interventionNames", [])),
             "population_summary":   ps.get("eligibilityModule", {}).get("eligibilityCriteria", "no data"),
-            "endpoint_summary":     json.dumps(outcome_summary)
+            "endpoint_summary":     json.dumps(outcome_summary),
+            "current_version_author":   "data ingestion algorithm",
+            "data_source":              "design_arm"
         })
         idx += 1
-    return comparator_arm_rows
+    return arm_group_rows
+
+def process_ctgov_outcome_groups(raw: dict) -> list[dict]:
+    outcome_groups = []
+    nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
+    outcomes = raw.get("resultsSection", {}).get("outcomeMeasuresModule", {}).get("outcomeMeasures", [])
+    group_codes = set()
+    for o in outcomes:
+        groups = o.get("groups", [])
+        for g in groups:
+            if g.get("id") not in group_codes:
+                outcome_groups.append({
+                    "nct_id":       nct_id,
+                    "group_code":   g.get("id"),
+                    "title":	    g.get("label", "no data"),
+                    "regimen":	    g.get("description", "no data"),
+                    "current_version_author":   "data ingestion algorithm",
+                    "data_source":              "outcome_group"
+                })
+                group_codes.add(g.get("id"))
+                # assumes good data
+    return outcome_groups
+
+def process_ctgov_event_groups(raw: dict) -> list[dict]:
+    event_group_rows = []
+    nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
+    event_groups = raw.get("resultsSection", {}).get("adverseEventsModule", {}).get("eventGroups", [])    
+    for eg in event_groups:
+        event_group_rows.append({
+            "nct_id":       nct_id,
+            "group_code":   eg.get("id"),
+            "title":	    eg.get("label", "no data"),
+            "regimen":	    eg.get("description", "no data"),
+            "current_version_author":   "data ingestion algorithm",
+            "data_source":              "event_group"
+        })
+    return event_group_rows
+
+def process_all_groups(raw: dict) -> list[dict]:
+    return process_ctgov_arm_groups(raw) + process_ctgov_outcome_groups(raw) + process_ctgov_event_groups(raw)
+
+# Scrape Outcomes
+def process_ctgov_outcomes(raw: dict) -> list[dict]:
+    outcome_rows = []
+    nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
+    outcomes = raw.get("resultsSection", {}).get("outcomeMeasuresModule", {}).get("outcomeMeasures", [])
+    idx = 0
+    for o in outcomes:
+        outcome_rows.append({
+            "uid":      f"COMP-{nct_id}-{idx}",
+            "nct_id":   nct_id,
+            "title":	o.get("title", "no data"),
+            "type":	    o.get("type", "no data"),
+            "description":  o.get("description", "no data"),
+            "population":   o.get("populationDescription", "no data"),
+            "units":        o.get("unitOfMeasure", "no data"),
+            "time_frame":   o.get("timeFrame", "no data"),
+            "p_value":      o.get("analyses", [None])[0].get("pValue", NO_DATA_VALUE)
+        })
+        idx += 1
+    return outcome_rows
+
+# Scrape Events
+def process_ctgov_events(raw: dict) -> list[dict]:
+    # maybe in this function, I can check for whether event_groups allign with arm_groups or if they need to be reconciled.
+    events_rows = []
+    nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
+    serious_events = raw.get("resultsSection", {}).get("adverseEventsModule", {}).get("seriousEvents", [])
+    # other_events = raw.get("resultsSection", {}).get("adverseEventsModule", {}).get("seriousEvents", [])
+    for e in serious_events:
+        reported_events = []
+        for report in e.get("stats", {}):
+            reported_events.append({
+                "group_id":     report.get("groupId", NO_DATA_VALUE),
+                "num_events":   report.get("numEvents", None),
+                "num_affected": report.get("numAffected", None),
+                "num_at_risk":  report.get("numAtRisk", None),
+                "is_serious_event": True
+            })
+
+        events_rows.append({
+            "nct_id":       nct_id,
+            "term":	        e.get("term", "no data"),
+            "organ_system":	        e.get("organSystem", "no data"),
+            "source_vocabulary":    e.get("sourceVocabulary", "no data"),
+            "assessmen_type":       e.get("assessmentType", "no data"),
+            "reports":              reported_events
+        })
+    return events_rows
+
+
+# def build_group_mapping(raw: dict):
+#     arms = process_ctgov_arm_groups(raw)
+#     ogs = process_ctgov_outcome_groups(raw)
+#     egs = process_ctgov_event_groups(raw)
+
+#     group_map = {}
+#     for a in arms:
+#         if a.title
 
 
 def check_ctgov_study(raw: dict) -> list:
