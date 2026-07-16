@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS queries (
     -- datetime_ingested       TEXT    -- removed because this should be the dt of the ctgov query, not the ingestion into this database
 );
 
-CREATE TABLE IF NOT EXISTS comparators (
+CREATE TABLE IF NOT EXISTS comparator_arms (
     id                      INTEGER PRIMARY KEY,
     uid                     TEXT,
     nct_id                  TEXT,
@@ -70,14 +70,39 @@ CREATE TABLE IF NOT EXISTS comparators (
     interventions           TEXT, -- JSON array
     population_summary      TEXT, 
     endpoint_summary        TEXT,
+
     is_approved             BOOLEAN DEFAULT FALSE,
-    previous_version_id     INTEGER,
+    -- doubly linked list to track expert updated versions. Most current should have next_version_id == NULL, 
+    previous_version_id     INTEGER DEFAULT NULL,
+    next_version_id         INTEGER DEFAULT NULL,
     current_version_author  TEXT,
 
+    UNIQUE(nct_id, title, previous_version_id), -- does not allow branching of version trees. NOTE this constrains concurrent users.
     FOREIGN KEY (nct_id)
         REFERENCES studies(nct_id),
     FOREIGN KEY (previous_version_id)
-        REFERENCES comparators(id)
+        REFERENCES comparator_arms(id)
+);
+
+CREATE TABLE IF NOT EXISTS outcomes (
+    id                      INTEGER PRIMARY KEY,
+    uid                     TEXT,
+    nct_id                  TEXT,
+    title                   TEXT,
+    type                    TEXT,
+    description             TEXT,
+
+
+    FOREIGN KEY (nct_id)
+        REFERENCES studies(nct_id)
+);
+
+CREATE TABLE IF NOT EXISTS adverse_events (
+    id                      INTEGER PRIMARY KEY,
+    term                    TEXT NOT NULL,
+    organ_system            TEXT,
+    source_vocabulary       TEXT,
+    assesment_type          TEXT
 );
 
 """
@@ -87,6 +112,7 @@ RELATIONSHIPS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS study_queries (
     nct_id                  TEXT,
     query_uid               TEXT,
+
     PRIMARY KEY (nct_id, query_uid),
     FOREIGN KEY (nct_id)
         REFERENCES studies(nct_id),
@@ -94,7 +120,21 @@ CREATE TABLE IF NOT EXISTS study_queries (
         REFERENCES queries(uid)
 );
 
+CREATE TABLE IF NOT EXISTS reported_events (
+    comparator_arm_id           INTEGER,
+    adverse_event_id        INTEGER,
+    num_events              INTEGER,
+    num_affected            INTEGER,
+    num_at_risk             INTEGER,
+    is_serious_event        BOOLEAN, -- this is an important distinction
+    is_info_verified        BOOLEAN,
 
+    PRIMARY KEY (comparator_arm_id, adverse_event_id),
+    FOREIGN KEY (comparator_arm_id)
+        REFERENCES comparator_arms(id),
+    FOREIGN KEY (adverse_event_id)
+        REFERENCES adverse_events(id)
+);
 """
 
 
@@ -163,23 +203,60 @@ def upsert_studies(conn, studies: list[dict], query: dict) -> int:
     crsr.close()
     return len(studies)
 
-def insert_comparators(conn, comparators: list[dict]) -> int:
+def insert_comparator_arms(conn, comparator_arms: list[dict]) -> int:
     # Each dict: {uid, text}
     allowed_cols = ("uid", "nct_id", "title", "interventions", "regimen", "population_summary", "endpoint_summary", "is_approved", "previous_version_id", "current_version_author")
     crsr = conn.cursor()
-    for comparator in comparators:
+    for comparator in comparator_arms:
         row = {k: comparator[k] for k in allowed_cols if k in comparator}
         cols = ", ".join(row.keys())
         placeholders = ", ".join(f":{k}" for k in row.keys()) 
         crsr.execute(
             f"""
-            INSERT INTO comparators ({cols})
+            INSERT INTO comparator_arms ({cols})
             VALUES ({placeholders})
             """,
             row,
         )
     crsr.close()
-    return len(comparators)
+    return len(comparator_arms)
+
+def insert_outcomes(conn, outcomes: list[dict]) -> int:
+    # Each dict: {uid, text}
+    allowed_cols = ("uid", "nct_id", "title") # TODO
+    crsr = conn.cursor()
+    for o in outcomes:
+        row = {k: o[k] for k in allowed_cols if k in o}
+        cols = ", ".join(row.keys())
+        placeholders = ", ".join(f":{k}" for k in row.keys()) 
+        crsr.execute(
+            f"""
+            INSERT INTO outcomes ({cols})
+            VALUES ({placeholders})
+            """,
+            row,
+        )
+    crsr.close()
+    return len(outcomes)
+
+def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_title: str) -> int:
+    most_recent_arm_id = query(conn, "SELECT id FROM comparator_arms WHERE nct_id = ? AND title = ? AND next_version_id = NULL", (nct_id, arm_title))[0][0]
+    # Each dict: {uid, text}
+    allowed_cols = ("uid", "nct_id", "title") # TODO
+    crsr = conn.cursor()
+    for e in events:
+        row = {k: e[k] for k in allowed_cols if k in e}
+        cols = ", ".join(row.keys())
+        placeholders = ", ".join(f":{k}" for k in row.keys()) 
+        crsr.execute(
+            f"""
+            INSERT INTO outcomes ({cols})
+            VALUES ({placeholders})
+            """,
+            row,
+        )
+    crsr.close()
+    return len(events)
 
 def query(conn, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
     cursor = conn.cursor()

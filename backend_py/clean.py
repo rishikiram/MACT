@@ -98,8 +98,8 @@ def process_ctgov_study(raw: dict) -> dict:
         "ingested_at": datetime.now(timezone.utc).isoformat(),
     }
 
-def process_ctgov_comparators(raw: dict) -> list[dict]:
-    comparator_rows = []
+def process_ctgov_comparator_arms(raw: dict) -> list[dict]:
+    comparator_arm_rows = []
     ps = raw.get("protocolSection", {})
     arms = ps.get("armsInterventionsModule", {}).get("armGroups", {})
     outcomes = raw.get("resultsSection", {}).get("outcomeMeasuresModule", {}).get("outcomeMeasures", [])
@@ -108,7 +108,7 @@ def process_ctgov_comparators(raw: dict) -> list[dict]:
     nct_id = ps.get("identificationModule", {}).get("nctId")
     idx = 0
     for arm in arms:
-        comparator_rows.append({
+        comparator_arm_rows.append({
             "uid":      f"COMP-{nct_id}-{idx}",
             "nct_id":   nct_id,
             "title":	arm.get("label", "no data"),
@@ -119,17 +119,13 @@ def process_ctgov_comparators(raw: dict) -> list[dict]:
             "endpoint_summary":     json.dumps(outcome_summary)
         })
         idx += 1
-    return comparator_rows
+    return comparator_arm_rows
 
 
-# def process_ctgov_studies(raw_studies: list[dict]) -> tuple[list[dict], int]:
-#     cleaned, dropped = [], 0
-#     for raw in raw_studies:
-#         row = process_ctgov_study(raw)
-#         if row is None:
-#             dropped += 1
-#         else:
-#             cleaned.append(row)
-#     return cleaned, dropped
+def check_ctgov_study(raw: dict) -> list:
+    problems = []
+    # check if reported events groups are the same as comparator groups
+    # check if primary outcomes are consitently labeled primary outcomes.
+    return problems
 
 
