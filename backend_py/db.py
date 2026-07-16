@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS queries (
     -- datetime_ingested       TEXT    -- removed because this should be the dt of the ctgov query, not the ingestion into this database
 );
 
-CREATE TABLE IF NOT EXISTS comparator_groups ( -- comparator_groups
+CREATE TABLE IF NOT EXISTS comparator_groups (
     id                      INTEGER PRIMARY KEY,
     uid                     TEXT,
     nct_id                  TEXT,

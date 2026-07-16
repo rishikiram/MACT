@@ -173,7 +173,7 @@ def process_ctgov_outcomes(raw: dict) -> list[dict]:
     idx = 0
     for o in outcomes:
         outcome_rows.append({
-            "uid":      f"COMP-{nct_id}-{idx}",
+            "uid":      f"OUT-{nct_id}-{idx}",
             "nct_id":   nct_id,
             "title":	o.get("title", "no data"),
             "type":	    o.get("type", "no data"),
@@ -181,7 +181,7 @@ def process_ctgov_outcomes(raw: dict) -> list[dict]:
             "population":   o.get("populationDescription", "no data"),
             "units":        o.get("unitOfMeasure", "no data"),
             "time_frame":   o.get("timeFrame", "no data"),
-            "p_value":      o.get("analyses", [None])[0].get("pValue", NO_DATA_VALUE)
+            "p_value":      o.get("analyses", [{}])[0].get("pValue", NO_DATA_VALUE)
         })
         idx += 1
     return outcome_rows

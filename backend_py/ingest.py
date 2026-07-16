@@ -39,9 +39,14 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
         # run verification function here
         study = clean.process_ctgov_study(raw)
         db.upsert_studies(conn, [study], query)
+        
         all_groups = clean.process_all_groups(raw)
         db.insert_comparator_groups(conn, all_groups)
+        
+        outcomes = clean.process_ctgov_outcomes(raw)
+        db.insert_outcomes(conn, outcomes)
 
+        
         # population = process_ctgov_population
         # outcomes = process_ctgov_outcomes
 
