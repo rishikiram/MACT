@@ -242,7 +242,9 @@ def insert_outcomes(conn, outcomes: list[dict]) -> int:
     return len(outcomes)
 
 def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_title: str) -> int:
+    #finds the most recent arm row id (based on title and nct_id)
     most_recent_arm_id = query(conn, "SELECT id FROM comparator_arms WHERE nct_id = ? AND title = ? AND next_version_id = NULL", (nct_id, arm_title))[0][0]
+    
     # Each e dict: {term, organ_system, source_vocabulary, assessment_type, num_events, num_affected, num_at_risk, is_serious_event}
     allowed_cols_ae = ("term", "organ_system", "source_vocabulary", "assessment_type")
     allowed_cols_re = ("num_events", "num_affected", "num_at_risk", "is_serious_event")
@@ -252,6 +254,7 @@ def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_ti
         row = {k: e.get(k) for k in allowed_cols_ae}
         cols = ", ".join(row.keys())
         placeholders = ", ".join(f":{k}" for k in row.keys())
+        #inserts (if needed) the adverse event
         crsr.execute(
             f"""
             INSERT INTO adverse_events ({cols})
@@ -260,6 +263,7 @@ def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_ti
             """,
             row,
         )
+        # get the adverse event id
         crsr.execute(
             """
             SELECT id FROM adverse_events
@@ -275,6 +279,7 @@ def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_ti
         row2["adverse_event_id"] = ae_id
         cols2 = ", ".join(row.keys())
         placeholders2 = ", ".join(f":{k}" for k in row.keys())
+        # insert the AE <--> arm link, AKA a reported event
         crsr.execute(
             f"""
             INSERT INTO reported_events ({cols2})
