@@ -2,7 +2,7 @@
 
 ## Core Components
 - Database for tracking and connecting information for clinical trial feasibilty. 
-- Programmable gaps, that realate requirements to claims. Allows automated gap assesment.
+- Programmable gaps, that realate requirements to claims. Allows automated gap assessment.
 - Targeted evidence-object generation from historical data. Currently utilizes CTGov and AACT.
 
 ## Objects
