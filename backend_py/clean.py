@@ -138,7 +138,7 @@ def process_ctgov_outcome_groups(raw: dict) -> list[dict]:
                 outcome_groups.append({
                     "nct_id":       nct_id,
                     "group_code":   g.get("id"),
-                    "title":	    g.get("label", "no data"),
+                    "title":	    g.get("title", "no data"),
                     "regimen":	    g.get("description", "no data"),
                     "current_version_author":   "data ingestion algorithm",
                     "data_source":              "outcome_group"
@@ -155,7 +155,7 @@ def process_ctgov_event_groups(raw: dict) -> list[dict]:
         event_group_rows.append({
             "nct_id":       nct_id,
             "group_code":   eg.get("id"),
-            "title":	    eg.get("label", "no data"),
+            "title":	    eg.get("title", "no data"),
             "regimen":	    eg.get("description", "no data"),
             "current_version_author":   "data ingestion algorithm",
             "data_source":              "event_group"
