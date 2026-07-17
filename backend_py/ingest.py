@@ -91,16 +91,30 @@ def test(conn) -> None:
     db.set_next_version_pointer(conn, after, prev)
     return
 
+def verify_data(params: dict, ):
+    raw_studies = ctgov.fetch_all_pages(params)
+    raw_studies = [r for r in raw_studies if r["hasResults"]]
+    print("---------------")
+    for raw in raw_studies:
+        probelms = clean.check_ctgov_study(raw)
+        print("Study: ", raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId"))
+        for p in probelms:
+            print(p)
+        print("---------------")
+
 def run():
     db.init_db()
     with db.connect() as conn:
+        ctgov_queries = ["nsclc_ppp"]
+        print("Using queries: ", ctgov_queries)
+        with open(QUERIES_FILE) as f:
+            queries = yaml.safe_load(f)
+        
+        for uid,params in queries.items():
+            if uid in ctgov_queries:    
+                verify_data(params)
+
         if not os.path.isfile(db.DB_PATH):
-            ctgov_queries = ["nsclc_ppp"]
-            print("Using queries: ", ctgov_queries)
-            with open(QUERIES_FILE) as f:
-                queries = yaml.safe_load(f)
-            
-            db.init_db()
             for uid,params in queries.items():
                 if uid in ctgov_queries:
                     ingest_ctgov_data(conn, uid, params)

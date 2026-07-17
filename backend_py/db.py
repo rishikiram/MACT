@@ -322,7 +322,9 @@ def set_next_version_pointer(conn, original_id: int, updated_id: int) -> None:
         return None
     # check if a cycle is created if connected
     p2 = updated_id
+    p2_prev = original_id
     while p2:
+        p2_prev = p2
         p2 = query(conn, "SELECT next_version_id FROM comparator_groups WHERE id = ?", (p2,))[0][0]
         if p2 == original_id:
             print(f"WARNING: a cycle was attempted to be made in comparator_groups by connecting row id:[{original_id}] to id:[{updated_id}]. The set was aborted.")
@@ -330,8 +332,8 @@ def set_next_version_pointer(conn, original_id: int, updated_id: int) -> None:
     
     cursor = conn.cursor()
     cursor.execute("UPDATE comparator_groups SET next_version_id = ? WHERE id = ?", (updated_id, original_id))
-    # find all reported_events where comparator_group_id = old_id, and update to new id
-    cursor.execute("UPDATE reported_events SET comparator_group_id = ? WHERE comparator_group_id = ?", (updated_id, original_id))
+    # find all reported_events where comparator_group_id = old_id, and update to new id. Use new end-of-linked-list id, not the updated id.
+    cursor.execute("UPDATE reported_events SET comparator_group_id = ? WHERE comparator_group_id = ?", (p2_prev, original_id))
     cursor.close()
     return None
 

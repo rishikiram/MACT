@@ -186,6 +186,34 @@ def process_ctgov_outcomes(raw: dict) -> list[dict]:
         idx += 1
     return outcome_rows
 
+def process_planned_outcomes(raw: dict) -> list[dict]:
+    planned_outcome_rows = []
+    nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
+    primary_outcomes = raw.get("protocolSection", {}).get("outcomesModule", {}).get("primaryOutcomes", [])
+    secondary_outcomes = raw.get("protocolSection", {}).get("outcomesModule", {}).get("secondaryOutcomes", [])
+    idx = 0
+    for po in primary_outcomes:
+        planned_outcome_rows.append({
+            "uid":      f"PLOUT-{nct_id}-{idx}",
+            "nct_id":   nct_id,
+            "title":	po.get("measure", "no data"),
+            "type":	    "PRIMARY",
+            "description":  po.get("description", "no data"),
+            "time_frame":   po.get("timeFrame", "no data"),
+        })
+        idx += 1
+    for po in secondary_outcomes:
+        planned_outcome_rows.append({
+            "uid":      f"PLOUT-{nct_id}-{idx}",
+            "nct_id":   nct_id,
+            "title":	po.get("measure", "no data"),
+            "type":	    "SECONDARY",
+            "description":  po.get("description", "no data"),
+            "time_frame":   po.get("timeFrame", "no data"),
+        })
+        idx += 1
+    return planned_outcome_rows
+
 # Scrape Events
 def process_ctgov_events(raw: dict) -> list[dict]:
     # maybe in this function, I can check for whether event_groups allign with arm_groups or if they need to be reconciled.
@@ -215,20 +243,71 @@ def process_ctgov_events(raw: dict) -> list[dict]:
     return events_rows
 
 
-# def build_group_mapping(raw: dict):
-#     arms = process_ctgov_arm_groups(raw)
-#     ogs = process_ctgov_outcome_groups(raw)
-#     egs = process_ctgov_event_groups(raw)
+def build_group_mapping(raw: dict) -> dict:
+    arms = process_ctgov_arm_groups(raw)
+    ogs = process_ctgov_outcome_groups(raw)
+    egs = process_ctgov_event_groups(raw)
 
-#     group_map = {}
-#     for a in arms:
-#         if a.title
+    # {redundant_group_code: updated_group_code}
+    group_map = {}
+    for a in arms:
+        for og in ogs:
+            if a["title"] == og["title"] or a["description"] == og["description"]:
+                group_map[og["group_code"]] = a["group_code"]
+        for eg in egs:
+            if a["title"] == eg["title"] or a["description"] == eg["description"]:
+                group_map[eg["group_code"]] = a["group_code"]
+    for eg in egs:
+        if eg not in group_map:
+            for og in ogs:
+                if og["title"] == eg["title"] or og["description"] == eg["description"]:
+                    group_map[eg["group_code"]] = og["group_code"]
+    
+    #print summary
+    print(len(arms), len(ogs), len())
+
+    return group_map
+
+
 
 
 def check_ctgov_study(raw: dict) -> list:
     problems = []
     # check if reported events groups are the same as comparator groups
+    arms = process_ctgov_arm_groups(raw)
+    ogs = process_ctgov_outcome_groups(raw)
+    egs = process_ctgov_event_groups(raw)
+
+    if len(arms) != len(ogs):
+        problems.append("Arm groups and outcome groups are differnet.")
+    if len(arms) != len(egs):
+        problems.append("Arm groups and event groups are differnet.")
+    if len(ogs) != len(egs):
+        problems.append("Outcome groups and event groups are differnet.")
+
+
     # check if primary outcomes are consitently labeled primary outcomes.
+    outcomes = process_ctgov_outcomes(raw) # uses outcomeMeasures
+    planned_outcomes = process_planned_outcomes(raw)
+    n_primary_o = sum([o["type"] == "PRIMARY" for o in outcomes])
+    n_primary_po = sum([o["type"] == "PRIMARY" for o in planned_outcomes])
+    if n_primary_o != n_primary_po:
+        problems.append("Number of primary outcomes varies between planned outcomes and reported outcome measures.")
+    n_secondary_o = sum([o["type"] == "SECONDARY" for o in outcomes])
+    n_secondary_po = sum([o["type"] == "SECONDARY" for o in planned_outcomes])
+    if n_secondary_o != n_secondary_po:
+        problems.append("Number of secondary outcomes varies between planned outcomes and reported outcome measures.")
+
+    outcome_map = [-1] * len(outcomes)
+    for i,o in enumerate(outcomes):
+        for j,po in enumerate(planned_outcomes):
+            if o["title"] == po["title"] or o["description"] == po["description"]:
+                outcome_map[i] = j
+    n_matched = sum([j < 0 for j in outcome_map]) 
+    if n_matched < len(outcome_map):
+        problems.append(f"{len(outcome_map) - n_matched}/{len(outcome_map)} measured outcome(s) could not be matched with any planned outcome.")
+
+
     return problems
 
 
