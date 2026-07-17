@@ -100,6 +100,8 @@ def verify_data(params: dict, ):
         print("Study: ", raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId"))
         for p in probelms:
             print(p)
+        print("")
+        clean.build_group_mapping(raw)
         print("---------------")
 
 def run():

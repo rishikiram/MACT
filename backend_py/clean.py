@@ -247,24 +247,33 @@ def build_group_mapping(raw: dict) -> dict:
     arms = process_ctgov_arm_groups(raw)
     ogs = process_ctgov_outcome_groups(raw)
     egs = process_ctgov_event_groups(raw)
+    # print(f"[build_group_mapping] arms={len(arms)} outcome_groups={len(ogs)} event_groups={len(egs)}")
 
     # {redundant_group_code: updated_group_code}
     group_map = {}
     for a in arms:
         for og in ogs:
-            if a["title"] == og["title"] or a["description"] == og["description"]:
+            if a["title"] == og["title"] or a["regimen"] == og["regimen"]:
                 group_map[og["group_code"]] = a["group_code"]
+                print(f"[build_group_mapping] outcome_group {og['group_code']!r} -> arm {a['group_code']!r} (matched on title/regimen)")
         for eg in egs:
-            if a["title"] == eg["title"] or a["description"] == eg["description"]:
+            if a["title"] == eg["title"] or a["regimen"] == eg["regimen"]:
                 group_map[eg["group_code"]] = a["group_code"]
+                print(f"[build_group_mapping] event_group {eg['group_code']!r} -> arm {a['group_code']!r} (matched on title/regimen)")
     for eg in egs:
-        if eg not in group_map:
+        if eg["title"] not in group_map:
             for og in ogs:
-                if og["title"] == eg["title"] or og["description"] == eg["description"]:
+                if og["title"] == eg["title"] or og["regimen"] == eg["regimen"]:
                     group_map[eg["group_code"]] = og["group_code"]
-    
+                    print(f"[build_group_mapping] event_group {eg['group_code']!r} -> outcome_group {og['group_code']!r} (fallback match)")
+
+    unmapped_groups = [og["group_code"] for og in ogs if og["group_code"] not in group_map]
+    unmapped_groups += [eg["group_code"] for eg in egs if eg["group_code"] not in group_map]
+    if unmapped_groups:
+        print(f"[build_group_mapping] WARNING: {len(unmapped_groups)} group(s) unmapped: {unmapped_groups}")
+
     #print summary
-    print(len(arms), len(ogs), len())
+    print(f"[build_group_mapping] built {len(group_map)} mapping(s) from {len(arms)} arms")
 
     return group_map
 
@@ -278,12 +287,18 @@ def check_ctgov_study(raw: dict) -> list:
     ogs = process_ctgov_outcome_groups(raw)
     egs = process_ctgov_event_groups(raw)
 
-    if len(arms) != len(ogs):
-        problems.append("Arm groups and outcome groups are differnet.")
-    if len(arms) != len(egs):
-        problems.append("Arm groups and event groups are differnet.")
-    if len(ogs) != len(egs):
-        problems.append("Outcome groups and event groups are differnet.")
+    group_mapping = build_group_mapping(raw)
+    
+    # if len(arms) != len(ogs):
+    #     problems.append("Arm groups and outcome groups are differnet.")
+    # if len(arms) != len(egs):
+    #     problems.append("Arm groups and event groups are differnet.")
+    # if len(ogs) != len(egs):
+    #     problems.append("Outcome groups and event groups are differnet.")
+    
+    if len(arms) != len(ogs) or len(arms) != len(egs) or len(ogs) != len(egs):
+        problems.append(f"Extra groups present: arms={len(arms)} outcome_groups={len(ogs)} event_groups={len(egs)}")
+
 
 
     # check if primary outcomes are consitently labeled primary outcomes.
