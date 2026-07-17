@@ -55,7 +55,6 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
         # population = process_ctgov_population
         # outcomes = process_ctgov_outcomes
 
-
     # after = db.count()
     # print(f"[ingest] done — db grew from {before} → {after} studies")
     
@@ -73,23 +72,45 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
 #                     ingest_ctgov_data(conn, uid, params)
 #         conn.close()
 
+def test(conn) -> None:
+    nct_ids = ["NCT03515837", "NCT03515837", "NCT03515837"]
+    original_group_codes = ["OG001", "OG000", "ARM001"]
+    updated_group_codes = ["ARM001", "ARM000", "ARM001"]
+
+    prev = db.get_most_recent_group_id(conn, nct_ids[0], original_group_codes[0])
+    print("Testing for updating group pointer \nBEFORE: ", prev)
+
+    for nct_id, original_group_code, updated_group_code in zip(nct_ids, original_group_codes, updated_group_codes):
+        original_id = db.get_most_recent_group_id(conn, nct_id, original_group_code)
+        updated_id = db.get_most_recent_group_id(conn, nct_id, updated_group_code)
+        db.set_next_version_pointer(conn, original_id, updated_id)
+
+    after = db.get_most_recent_group_id(conn, nct_ids[0], original_group_codes[0])
+    print("AFTER: ", after)
+
+    db.set_next_version_pointer(conn, after, prev)
+    return
+
 def run():
-    if os.path.isfile(db.DB_PATH):
-        print(f"Database file already exists at {db.DB_PATH}. Script will now exit.")
-        return
-    
-    ctgov_queries = ["nsclc_ppp"]
-    print("Using queries: ", ctgov_queries)
-    with open(QUERIES_FILE) as f:
-        queries = yaml.safe_load(f)
-    
     db.init_db()
     with db.connect() as conn:
-        for uid,params in queries.items():
-            if uid in ctgov_queries:
-                ingest_ctgov_data(conn, uid, params)
-    conn.close()
+        if not os.path.isfile(db.DB_PATH):
+            ctgov_queries = ["nsclc_ppp"]
+            print("Using queries: ", ctgov_queries)
+            with open(QUERIES_FILE) as f:
+                queries = yaml.safe_load(f)
+            
+            db.init_db()
+            for uid,params in queries.items():
+                if uid in ctgov_queries:
+                    ingest_ctgov_data(conn, uid, params)
+            
+        else:
+            print(f"Database file already exists at {db.DB_PATH}. Script will only run tests.")
 
+        test(conn)
+    
+    conn.close()
 
 if __name__ == "__main__":
     run()

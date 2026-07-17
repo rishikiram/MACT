@@ -246,9 +246,8 @@ def insert_outcomes(conn, outcomes: list[dict]) -> int:
     return len(outcomes)
 
 def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, group_code: str) -> int:
-    #finds the most recent arm row id (based on title and nct_id)
-    # TODO update this function
-    most_recent_arm_id = query(conn, "SELECT id FROM comparator_groups WHERE nct_id = ? AND group_code = ? AND next_version_id IS NULL", (nct_id, group_code))[0][0]
+    # finds the most recent arm row id (based on title and nct_id)
+    most_recent_group_id = get_most_recent_group_id(conn, nct_id, group_code)
     
     # Each e dict: {term, organ_system, source_vocabulary, assessment_type, num_events, num_affected, num_at_risk, is_serious_event}
     allowed_cols_ae = ("term", "organ_system", "source_vocabulary", "assessment_type")
@@ -277,10 +276,10 @@ def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, group_
             """,
             row,
         )
-        ae_id = crsr.fetchall()[0][0] # TODO error here
+        ae_id = crsr.fetchall()[0][0] 
 
         row2 = {k: e.get(k) for k in allowed_cols_re}
-        row2["comparator_group_id"] = most_recent_arm_id
+        row2["comparator_group_id"] = most_recent_group_id
         row2["adverse_event_id"] = ae_id
         cols2 = ", ".join(row2.keys())
         placeholders2 = ", ".join(f":{k}" for k in row2.keys())
@@ -296,9 +295,45 @@ def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, group_
     crsr.close()
     return len(events)
 
-def get_most_recent_group_id(conn, group_code: str) -> int:
-    # TODO
-    return -1
+def get_most_recent_group_id(conn, nct_id: str, group_code: str) -> int:
+    row = query(conn, "SELECT id, next_version_id FROM comparator_groups WHERE nct_id = ? AND group_code = ?", (nct_id, group_code))[0]
+    # check for loop
+    # also check for a cycle
+    p1, p2 = row[0], row[1]
+    p2_prev = p1
+    a_switch = True # alternates on off
+    while p2 and p1:
+        p2_prev = p2
+        p2 = query(conn, "SELECT next_version_id FROM comparator_groups WHERE id = ?", (p2,))[0][0]
+        
+        if a_switch: 
+            p1 = query(conn, "SELECT next_version_id FROM comparator_groups WHERE id = ?", (p1,))[0][0]
+        a_switch = not a_switch
+        
+        if p1 == p2:
+            raise Exception(f"A cycle was found in comparator_groups! Cycle contained row where nct_id = {nct_id}, group_code = {group_code}, id = {p1}.")
+    
+    return p2_prev
+
+def set_next_version_pointer(conn, original_id: int, updated_id: int) -> None:
+    # check for identity
+    if original_id == updated_id:
+        print(f"WARNING: cannot set next_version_id to reference itself (tried on id={original_id}).")
+        return None
+    # check if a cycle is created if connected
+    p2 = updated_id
+    while p2:
+        p2 = query(conn, "SELECT next_version_id FROM comparator_groups WHERE id = ?", (p2,))[0][0]
+        if p2 == original_id:
+            print(f"WARNING: a cycle was attempted to be made in comparator_groups by connecting row id:[{original_id}] to id:[{updated_id}]. The set was aborted.")
+            return None
+    
+    cursor = conn.cursor()
+    cursor.execute("UPDATE comparator_groups SET next_version_id = ? WHERE id = ?", (updated_id, original_id))
+    # find all reported_events where comparator_group_id = old_id, and update to new id
+    cursor.execute("UPDATE reported_events SET comparator_group_id = ? WHERE comparator_group_id = ?", (updated_id, original_id))
+    cursor.close()
+    return None
 
 def query(conn, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
     cursor = conn.cursor()
