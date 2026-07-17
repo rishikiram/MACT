@@ -92,6 +92,10 @@ CREATE TABLE IF NOT EXISTS outcomes (
     title                   TEXT,
     type                    TEXT,
     description             TEXT,
+    population_description  TEXT,
+    units                   TEXT,
+    time_frame              TEXT,
+    p_value                 REAL,
 
     FOREIGN KEY (nct_id)
         REFERENCES studies(nct_id)
@@ -100,9 +104,9 @@ CREATE TABLE IF NOT EXISTS outcomes (
 CREATE TABLE IF NOT EXISTS adverse_events (
     id                      INTEGER PRIMARY KEY,
     term                    TEXT NOT NULL,
-    organ_system            TEXT,
-    source_vocabulary       TEXT,
-    assessment_type         TEXT,
+    organ_system            TEXT NOT NULL,
+    source_vocabulary       TEXT NOT NULL,
+    assessment_type         TEXT NOT NULL,
 
     UNIQUE(term, organ_system, source_vocabulary, assessment_type)
 );
@@ -123,7 +127,7 @@ CREATE TABLE IF NOT EXISTS study_queries (
 );
 
 CREATE TABLE IF NOT EXISTS reported_events (
-    comparator_group_id       INTEGER,
+    comparator_group_id     INTEGER,
     adverse_event_id        INTEGER,
     num_events              INTEGER,
     num_affected            INTEGER,
@@ -225,7 +229,7 @@ def insert_comparator_groups(conn, comparator_groups: list[dict]) -> int:
 
 def insert_outcomes(conn, outcomes: list[dict]) -> int:
     # Each dict: {uid, text}
-    allowed_cols = ("uid", "nct_id", "title") # TODO
+    allowed_cols = ("uid", "nct_id", "title", "type", "description", "population_description", "units", "time_frame", "p_value") 
     crsr = conn.cursor()
     for o in outcomes:
         row = {k: o[k] for k in allowed_cols if k in o}
@@ -241,9 +245,10 @@ def insert_outcomes(conn, outcomes: list[dict]) -> int:
     crsr.close()
     return len(outcomes)
 
-def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_title: str) -> int:
+def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, group_code: str) -> int:
     #finds the most recent arm row id (based on title and nct_id)
-    most_recent_arm_id = query(conn, "SELECT id FROM comparator_groups WHERE nct_id = ? AND title = ? AND next_version_id = NULL", (nct_id, arm_title))[0][0]
+    # TODO update this function
+    most_recent_arm_id = query(conn, "SELECT id FROM comparator_groups WHERE nct_id = ? AND group_code = ? AND next_version_id IS NULL", (nct_id, group_code))[0][0]
     
     # Each e dict: {term, organ_system, source_vocabulary, assessment_type, num_events, num_affected, num_at_risk, is_serious_event}
     allowed_cols_ae = ("term", "organ_system", "source_vocabulary", "assessment_type")
@@ -272,13 +277,13 @@ def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_ti
             """,
             row,
         )
-        ae_id = crsr.fetchall()[0][0]
+        ae_id = crsr.fetchall()[0][0] # TODO error here
 
         row2 = {k: e.get(k) for k in allowed_cols_re}
         row2["comparator_group_id"] = most_recent_arm_id
         row2["adverse_event_id"] = ae_id
-        cols2 = ", ".join(row.keys())
-        placeholders2 = ", ".join(f":{k}" for k in row.keys())
+        cols2 = ", ".join(row2.keys())
+        placeholders2 = ", ".join(f":{k}" for k in row2.keys())
         # insert the AE <--> arm link, AKA a reported event
         crsr.execute(
             f"""
@@ -290,6 +295,10 @@ def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, arm_ti
 
     crsr.close()
     return len(events)
+
+def get_most_recent_group_id(conn, group_code: str) -> int:
+    # TODO
+    return -1
 
 def query(conn, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
     cursor = conn.cursor()

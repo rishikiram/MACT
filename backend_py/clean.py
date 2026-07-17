@@ -178,7 +178,7 @@ def process_ctgov_outcomes(raw: dict) -> list[dict]:
             "title":	o.get("title", "no data"),
             "type":	    o.get("type", "no data"),
             "description":  o.get("description", "no data"),
-            "population":   o.get("populationDescription", "no data"),
+            "population_description":       o.get("populationDescription", "no data"),
             "units":        o.get("unitOfMeasure", "no data"),
             "time_frame":   o.get("timeFrame", "no data"),
             "p_value":      o.get("analyses", [{}])[0].get("pValue", NO_DATA_VALUE)
@@ -197,7 +197,7 @@ def process_ctgov_events(raw: dict) -> list[dict]:
         reported_events = []
         for report in e.get("stats", {}):
             reported_events.append({
-                "group_id":     report.get("groupId", NO_DATA_VALUE),
+                "group_code":     report.get("groupId", NO_DATA_VALUE),
                 "num_events":   report.get("numEvents", None),
                 "num_affected": report.get("numAffected", None),
                 "num_at_risk":  report.get("numAtRisk", None),
@@ -209,7 +209,7 @@ def process_ctgov_events(raw: dict) -> list[dict]:
             "term":	        e.get("term", "no data"),
             "organ_system":	        e.get("organSystem", "no data"),
             "source_vocabulary":    e.get("sourceVocabulary", "no data"),
-            "assessmen_type":       e.get("assessmentType", "no data"),
+            "assessment_type":       e.get("assessmentType", "no data"),
             "reports":              reported_events
         })
     return events_rows

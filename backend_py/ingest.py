@@ -46,7 +46,12 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
         outcomes = clean.process_ctgov_outcomes(raw)
         db.insert_outcomes(conn, outcomes)
 
-        
+        events = clean.process_ctgov_events(raw)
+        for e in events:
+            for r in e["reports"]:
+                db.insert_and_link_adverse_events(conn, [e | r], e["nct_id"], r["group_code"])
+
+
         # population = process_ctgov_population
         # outcomes = process_ctgov_outcomes
 
