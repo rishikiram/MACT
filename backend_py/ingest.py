@@ -16,10 +16,9 @@ import os
 import logging
 import datetime
 
-import backend_py.clean as clean
+import backend_py.ctgov_transform as ctgov_transform
 import backend_py.ctgov as ctgov
 import backend_py.db as db
-import backend_py.evidence_objects as eos
 
 QUERIES_FILE = Path(__file__).parent / "queries_ctgov.yaml"
 
@@ -46,23 +45,29 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
     raw_studies = [r for r in raw_studies if r["hasResults"]]
     for raw in raw_studies:
         # run verification function here
-        study = clean.process_ctgov_study(raw)
+        study = ctgov_transform.process_study(raw)
         db.upsert_studies(conn, [study], query)
         
-        all_groups = clean.process_all_groups(raw)
+        all_groups = ctgov_transform.process_all_groups(raw)
         db.insert_comparator_groups(conn, all_groups)
         
-        outcomes = clean.process_ctgov_outcomes(raw)
+        outcomes = ctgov_transform.process_outcomes(raw)
         db.insert_outcomes(conn, outcomes)
 
-        events = clean.process_ctgov_events(raw)
+        events = ctgov_transform.process_events(raw)
         for e in events:
             for r in e["reports"]:
                 db.insert_and_link_adverse_events(conn, [e | r], e["nct_id"], r["group_code"])
+        
+        nct_id = study["nct_id"]
+        group_code_map = ctgov_transform.build_group_mapping(raw)
+        for original_group_code, updated_group_code in group_code_map.items():
+            original_id = db.get_most_recent_group_id(conn, nct_id, original_group_code)
+            updated_id = db.get_most_recent_group_id(conn, nct_id, updated_group_code)
+            db.set_next_version_pointer(conn, original_id, updated_id)
 
-
-        # population = process_ctgov_population
-        # outcomes = process_ctgov_outcomes
+        # population = process_population
+        # outcomes = process_outcomes
 
     # after = db.count()
     # print(f"[ingest] done — db grew from {before} → {after} studies")
@@ -78,7 +83,7 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
 #         with db.connect() as conn:
 #             for uid,params in queries.items():
 #                 if uid in ctgov_queries:
-#                     ingest_ctgov_data(conn, uid, params)
+#                     ingest_data(conn, uid, params)
 #         conn.close()
 
 def test(conn) -> None:
@@ -100,12 +105,12 @@ def test(conn) -> None:
     db.set_next_version_pointer(conn, after, prev)
     return
 
-def verify_data(params: dict, ):
+def verify_data(params: dict):
     verify_logger.info(f"Verification Ran at {datetime.datetime.now()}")
     raw_studies = ctgov.fetch_all_pages(params)
     raw_studies = [r for r in raw_studies if r["hasResults"]]
     for raw in raw_studies:
-        probelms = clean.check_ctgov_study(raw)
+        probelms = ctgov_transform.check_study(raw)
         nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
         verify_logger.info(f"-------------- Study: {nct_id} --------------------")
         for p in probelms:
@@ -114,26 +119,28 @@ def verify_data(params: dict, ):
     verify_logger.info("\n\n###########################################################################\n\n")
 
 def run():
-    db.init_db()
-    with db.connect() as conn:
-        ctgov_queries = ["nsclc_ppp"]
-        print("Using queries: ", ctgov_queries)
-        with open(QUERIES_FILE) as f:
-            queries = yaml.safe_load(f)
-        
-        for uid,params in queries.items():
-            if uid in ctgov_queries:    
-                verify_data(params)
 
-        if not os.path.isfile(db.DB_PATH):
+    ctgov_queries = ["nsclc_ppp"]
+    print("Using queries: ", ctgov_queries)
+    with open(QUERIES_FILE) as f:
+        queries = yaml.safe_load(f)
+    
+    for uid,params in queries.items():
+        if uid in ctgov_queries:    
+            verify_data(params)
+
+
+    if not os.path.isfile(db.DB_PATH):
+        db.init_db()
+        with db.connect() as conn:
             for uid,params in queries.items():
                 if uid in ctgov_queries:
                     ingest_ctgov_data(conn, uid, params)
             
-        else:
-            print(f"Database file already exists at {db.DB_PATH}. Script will only run tests.")
-
-        test(conn)
+    else:
+        print(f"Database file already exists at {db.DB_PATH}. Script will only run tests.")
+        with db.connect() as conn:
+            test(conn)
     
     conn.close()
 

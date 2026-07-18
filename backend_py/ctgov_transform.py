@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 NO_DATA_VALUE = "no data"
 
-def process_ctgov_study(raw: dict) -> dict:
+def process_study(raw: dict) -> dict:
     ps = raw.get("protocolSection", {})
 
     nct_id = ps.get("identificationModule", {}).get("nctId")
@@ -100,7 +100,7 @@ def process_ctgov_study(raw: dict) -> dict:
     }
 
 # Scrape Groups
-def process_ctgov_arm_groups(raw: dict) -> list[dict]:
+def process_arm_groups(raw: dict) -> list[dict]:
     arm_group_rows = []
     ps = raw.get("protocolSection", {})
     arms = ps.get("armsInterventionsModule", {}).get("armGroups", {})
@@ -126,7 +126,7 @@ def process_ctgov_arm_groups(raw: dict) -> list[dict]:
         idx += 1
     return arm_group_rows
 
-def process_ctgov_outcome_groups(raw: dict) -> list[dict]:
+def process_outcome_groups(raw: dict) -> list[dict]:
     outcome_groups = []
     nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
     outcomes = raw.get("resultsSection", {}).get("outcomeMeasuresModule", {}).get("outcomeMeasures", [])
@@ -147,7 +147,7 @@ def process_ctgov_outcome_groups(raw: dict) -> list[dict]:
                 # assumes good data
     return outcome_groups
 
-def process_ctgov_event_groups(raw: dict) -> list[dict]:
+def process_event_groups(raw: dict) -> list[dict]:
     event_group_rows = []
     nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
     event_groups = raw.get("resultsSection", {}).get("adverseEventsModule", {}).get("eventGroups", [])    
@@ -163,10 +163,10 @@ def process_ctgov_event_groups(raw: dict) -> list[dict]:
     return event_group_rows
 
 def process_all_groups(raw: dict) -> list[dict]:
-    return process_ctgov_arm_groups(raw) + process_ctgov_outcome_groups(raw) + process_ctgov_event_groups(raw)
+    return process_arm_groups(raw) + process_outcome_groups(raw) + process_event_groups(raw)
 
 # Scrape Outcomes
-def process_ctgov_outcomes(raw: dict) -> list[dict]:
+def process_outcomes(raw: dict) -> list[dict]:
     outcome_rows = []
     nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
     outcomes = raw.get("resultsSection", {}).get("outcomeMeasuresModule", {}).get("outcomeMeasures", [])
@@ -215,7 +215,7 @@ def process_planned_outcomes(raw: dict) -> list[dict]:
     return planned_outcome_rows
 
 # Scrape Events
-def process_ctgov_events(raw: dict) -> list[dict]:
+def process_events(raw: dict) -> list[dict]:
     # maybe in this function, I can check for whether event_groups allign with arm_groups or if they need to be reconciled.
     events_rows = []
     nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
@@ -244,9 +244,9 @@ def process_ctgov_events(raw: dict) -> list[dict]:
 
 
 def build_group_mapping(raw: dict) -> dict:
-    arms = process_ctgov_arm_groups(raw)
-    ogs = process_ctgov_outcome_groups(raw)
-    egs = process_ctgov_event_groups(raw)
+    arms = process_arm_groups(raw)
+    ogs = process_outcome_groups(raw)
+    egs = process_event_groups(raw)
 
     # {redundant_group_code: updated_group_code}
     group_map = {}
@@ -266,16 +266,14 @@ def build_group_mapping(raw: dict) -> dict:
     return group_map
 
 
-
-
-def check_ctgov_study(raw: dict) -> list:
+def check_study(raw: dict) -> list:
     log = []
     
     ## CHEKCING GROUPS
     # check if reported events groups are the same as comparator groups
-    arms = process_ctgov_arm_groups(raw)
-    ogs = process_ctgov_outcome_groups(raw)
-    egs = process_ctgov_event_groups(raw)
+    arms = process_arm_groups(raw)
+    ogs = process_outcome_groups(raw)
+    egs = process_event_groups(raw)
     group_mapping = build_group_mapping(raw)
 
     if len(arms) != len(ogs) or len(arms) != len(egs) or len(ogs) != len(egs):
@@ -298,7 +296,7 @@ def check_ctgov_study(raw: dict) -> list:
 
     ## CHECKING planned vs reported OUTCOMES
     # check if primary outcomes are consitently labeled primary outcomes.
-    outcomes = process_ctgov_outcomes(raw) # uses outcomeMeasures
+    outcomes = process_outcomes(raw) # uses outcomeMeasures
     planned_outcomes = process_planned_outcomes(raw)
     n_primary_o = sum([o["type"] == "PRIMARY" for o in outcomes])
     n_primary_po = sum([o["type"] == "PRIMARY" for o in planned_outcomes])
