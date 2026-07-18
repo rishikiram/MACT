@@ -15,15 +15,12 @@ frontend:
 backend:
 	cd backend && npx ts-node server.ts
 
-backend-py:
-	cd backend_py && uvicorn api:app --reload --port 8010
+# backend-py:
+# 	cd backend_py && uvicorn api:app --reload --port 8010
 
 ingest:
 	python -m backend_py.ingest 
 
-# Bootstrap the DataDictionary table from the current studies schema
-dataDict-init:
-	python -c "from backend_py.db import build_data_dictionary; build_data_dictionary()"
-
-ingest-traceable:
-	python -c "from backend_py.ingest import ingest_tracible_stack_test; ingest_tracible_stack_test();"
+# # Bootstrap the DataDictionary table from the current studies schema
+# dataDict-init:
+# 	python -c "from backend_py.db import build_data_dictionary; build_data_dictionary()"

@@ -1,104 +1,47 @@
-# [OUTDATED] Toolkit and Application for Clinical Trials (TACT)
+# Toolkit and Application for Clinical Trials (TACT)
 
-A toolkit for exploring ClinicalTrials.gov data — a Python pipeline for ingesting, cleaning, and analyzing studies into a local SQLite database, paired with a web app for interactive mapping and visualization.
+A toolkit for exploring ClinicalTrials.gov data — a Python pipeline for ingesting and structuring studies into a local SQLite database, paired with a web app for interactive mapping and visualization.
 
 ```
 TACT/
-├── backend_py/          # Python data pipeline
+├── backend_py/          # Python data pipeline — see backend_py/README.md
 ├── data/
 │   └── clinical_trials.db
-├── frontend/            # React + Vite web app
+├── frontend/             # React + Vite web app
 │   └── src/
-└── backend/             # Node.js + Express API proxy
+└── backend/              # Node.js + Express API proxy
 ```
 
 ## Python Data Pipeline
 
-### How to run
+See [`backend_py/README.md`](backend_py/README.md) for the data model. From the repo root:
 
 ```bash
-cd backend_py
-pip install -r requirements.txt
-
-# list available presets
-python ingest.py --list
-
-# run a named preset (defined in queries.yaml)
-python ingest.py nsclc
-
-# open the EDA notebook
-jupyter notebook eda.ipynb
+pip install -r backend_py/requirements.txt
+make ingest         # fetch from CT.gov, write to data/clinical_trials.db (presets: backend_py/queries_ctgov.yaml)
 ```
 
-### Architecture
-
-The pipeline is independent of the web app. It fetches from CT.gov, cleans the data, and writes to `data/clinical_trials.db`. Ingestion is idempotent — re-runs upsert by NCT ID.
-
-```
-backend_py (Python pipeline)  ──►  data/clinical_trials.db (SQLite)
-```
-
-Query presets are defined in `backend_py/queries_ctgov.yaml`. Each preset maps a name (e.g. `nsclc`, `oncology`) to CT.gov v2 API parameters. The `eda.ipynb` notebook reads from the database and produces figures saved to `backend_py/figures/` and `figures/`.
-
-| File | Description |
-|---|---|
-| `db.py` | database schema and definition |
-| `clean.py` | data processing, converting the json from clinicaltrials.gov into database rows|
-| `queries_ctgov.yaml` | yaml file directly defining query to clinicaltrials.gov |
-| `injest.py` | script for CLI to run injection |
-
-#### Adding a new preset
-
-Add an entry to `backend_py/queries_ctgov.yaml` using CT.gov v2 API parameter keys, then run `python ingest.py <your-preset>`.
+Or `make dev` to start the frontend, Node backend, and FastAPI backend together.
 
 ## Web App
-
-### How to run
 
 | | Command | URL |
 |---|---|---|
 | Frontend | `npm run dev` in `/frontend` | `http://localhost:5173` |
 | Backend | `npm run dev` in `/backend` | `http://localhost:3001` |
 
-### Architecture
-
-The frontend never calls ClinicalTrials.gov directly. All requests go through the Express backend, which forwards them to the CT.gov v2 API and pipes the response back. The `/api/trials/all` endpoint fetches up to 20,000 results and caches responses to disk.
+The frontend never calls ClinicalTrials.gov directly — it goes through the Express backend, which forwards to the CT.gov v2 API and caches responses to disk (`backend/cache/`).
 
 ```
-frontend (React + Vite) 
-    │  HTTP
-    ▼
-backend (Node.js + Express + TypeScript)
-    │  CT.gov v2 API
-    ▼
-ClinicalTrials.gov
+frontend (React + Vite) → backend (Node.js + Express) → ClinicalTrials.gov
 ```
 
-Preset queries are defined in `frontend/src/api/queries.ts` as named `FetchTrialsParams` objects (e.g. `ONCOLOGY`, `NSCLC`, `RECRUITING_DIABETES`). The user selects one via toggle buttons in `App.tsx`, which drives `useTrials` — a TanStack Query hook wrapping `fetchTrials`.
-
-#### Main Components
-
-**`TrialTable.tsx`** — renders trials as an expandable list. Click a row to see NCT ID, phase, conditions, site count, and brief summary.
-
-**`MapShell.tsx`** — thin MapLibre GL wrapper. Accepts `sources`, `layers`, and an `onLoad` callback that hands back the live map instance.
-
-**`UsStatesMap.tsx`** — choropleth of trials per US state. `aggregateByState` counts trials per state (one count per trial regardless of how many sites it has there), enriches the bundled GeoJSON with that count, and passes it to `MapShell`. Hovering a state shows a popup with the state name and trial count.
-
-**`ScatterMap.tsx`** — plots individual trial sites as points with random jitter for overlapping coordinates.
-
-**`HeatMap.tsx`** — heatmap density view of trial site locations.
+Preset queries live in `frontend/src/api/queries.ts`. Key components: `TrialTable.tsx` (results list), `MapShell.tsx` (MapLibre wrapper), `UsStatesMap.tsx` / `ScatterMap.tsx` / `HeatMap.tsx` (map views).
 
 ## Tech stack
 
 Python 3 · SQLite · pandas · Jupyter · React + Vite · TanStack Query · MapLibre GL JS · Node.js + Express · TypeScript
 
-<!-- ## Tests
-
-- **Backend** (Jest + Supertest): proxy forwards correctly, responds 502 on upstream error
-- **Frontend** (Vitest): `fetchTrials` URL and response mapping, `useTrials` success/error/disabled states, `TrialTable` render and expand/collapse, `aggregateByState` count logic -->
-
 ## References
 
 - [ClinicalTrials.gov API docs](https://clinicaltrials.gov/data-api/api)
-
-<!-- last updated on commit: 529a1d9 -->
