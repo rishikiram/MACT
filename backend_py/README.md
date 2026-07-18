@@ -1,4 +1,4 @@
-# Clinical Trial Traceability Database
+# CTGov data processing: Comparator Library
 
 ## Core Components
 - Database for comparator groups in clinical trials, processsing data from ClinicalTrials.gov. 
