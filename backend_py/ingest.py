@@ -94,15 +94,12 @@ def test(conn) -> None:
 def verify_data(params: dict, ):
     raw_studies = ctgov.fetch_all_pages(params)
     raw_studies = [r for r in raw_studies if r["hasResults"]]
-    print("---------------")
     for raw in raw_studies:
         probelms = clean.check_ctgov_study(raw)
-        print("Study: ", raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId"))
+        print("-------------- Study: ", raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId"), "--------------------")
         for p in probelms:
             print(p)
         print("")
-        clean.build_group_mapping(raw)
-        print("---------------")
 
 def run():
     db.init_db()
