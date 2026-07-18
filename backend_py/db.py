@@ -369,16 +369,4 @@ def get_id(conn, table_name, uid) -> int:
 #     text = query(conn, "SELECT text FROM queries WHERE uid = ?", (query_uid,))[0][0]
 #     return json.loads(text)
 
-def build_data_dictionary(table_name: str = "studies") -> None:
-    """
-    Bootstrap entry point. Creates the DataDictionary table if needed, then
-    replaces all rows for table_name with the current schema — existing annotations
-    are wiped. Delegates all SQL to dictionary_repo so this function needs no changes
-    when switching databases (only connect() and get_table_columns() above change).
-    """
-    from backend_py.data_dictionary import build_dataDictionary, build_from_table
-    with connect() as conn:
-        build_dataDictionary(conn)
-        n = build_from_table(conn, table_name)
-    print(f"[db] DataDictionary built for '{table_name}' — {n} columns registered")
 
