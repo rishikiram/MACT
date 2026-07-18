@@ -270,6 +270,8 @@ def build_group_mapping(raw: dict) -> dict:
 
 def check_ctgov_study(raw: dict) -> list:
     log = []
+    
+    ## CHEKCING GROUPS
     # check if reported events groups are the same as comparator groups
     arms = process_ctgov_arm_groups(raw)
     ogs = process_ctgov_outcome_groups(raw)
@@ -277,7 +279,7 @@ def check_ctgov_study(raw: dict) -> list:
     group_mapping = build_group_mapping(raw)
 
     if len(arms) != len(ogs) or len(arms) != len(egs) or len(ogs) != len(egs):
-        log.append(f"Extra groups present: arms={len(arms)} outcome_groups={len(ogs)} event_groups={len(egs)}")
+        log.append(f"[groups] Extra groups present: arms={len(arms)} outcome_groups={len(ogs)} event_groups={len(egs)}")
 
     arm_codes = {a["group_code"] for a in arms}
     og_codes = {og["group_code"] for og in ogs}
@@ -286,35 +288,35 @@ def check_ctgov_study(raw: dict) -> list:
     for source_code, target_code in group_mapping.items():
         source_type = "outcome_group" if source_code in og_codes else "event_group" if source_code in eg_codes else "unknown_group"
         target_type = "arm" if target_code in arm_codes else "outcome_group" if target_code in og_codes else "unknown_group"
-        log.append(f"{source_type} {source_code!r} mapped -> {target_type} {target_code!r}")
+        log.append(f"[groups] {source_type} {source_code!r} mapped -> {target_type} {target_code!r}")
 
     unmapped_groups = [og["group_code"] for og in ogs if og["group_code"] not in group_mapping]
     unmapped_groups += [eg["group_code"] for eg in egs if eg["group_code"] not in group_mapping]
     if unmapped_groups:
-        log.append(f"{len(unmapped_groups)} group(s) unmapped: {unmapped_groups}")
+        log.append(f"[groups] {len(unmapped_groups)} group(s) unmapped: {unmapped_groups}")
 
 
-
+    ## CHECKING planned vs reported OUTCOMES
     # check if primary outcomes are consitently labeled primary outcomes.
     outcomes = process_ctgov_outcomes(raw) # uses outcomeMeasures
     planned_outcomes = process_planned_outcomes(raw)
     n_primary_o = sum([o["type"] == "PRIMARY" for o in outcomes])
     n_primary_po = sum([o["type"] == "PRIMARY" for o in planned_outcomes])
     if n_primary_o != n_primary_po:
-        log.append("Number of primary outcomes varies between planned outcomes and reported outcome measures.")
+        log.append("[outcomes] Number of primary outcomes varies between planned outcomes and reported outcome measures.")
     n_secondary_o = sum([o["type"] == "SECONDARY" for o in outcomes])
     n_secondary_po = sum([o["type"] == "SECONDARY" for o in planned_outcomes])
     if n_secondary_o != n_secondary_po:
-        log.append("Number of secondary outcomes varies between planned outcomes and reported outcome measures.")
+        log.append("[outcomes] Number of secondary outcomes varies between planned outcomes and reported outcome measures.")
 
     outcome_map = [-1] * len(outcomes)
     for i,o in enumerate(outcomes):
         for j,po in enumerate(planned_outcomes):
             if o["title"] == po["title"] or o["description"] == po["description"]:
                 outcome_map[i] = j
-    n_matched = sum([j < 0 for j in outcome_map]) 
+    n_matched = sum([j < 0 for j in outcome_map])
     if n_matched < len(outcome_map):
-        log.append(f"{len(outcome_map) - n_matched}/{len(outcome_map)} measured outcome(s) could not be matched with any planned outcome.")
+        log.append(f"[outcomes] {len(outcome_map) - n_matched}/{len(outcome_map)} measured outcome(s) could not be matched with any planned outcome.")
 
 
     return log

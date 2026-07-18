@@ -13,6 +13,8 @@ from pathlib import Path
 import yaml
 import json
 import os
+import logging
+import datetime
 
 import backend_py.clean as clean
 import backend_py.ctgov as ctgov
@@ -20,6 +22,13 @@ import backend_py.db as db
 import backend_py.evidence_objects as eos
 
 QUERIES_FILE = Path(__file__).parent / "queries_ctgov.yaml"
+
+VERIFY_LOG_FILE = Path(__file__).parent.parent / "data" / "verify_data.log"
+VERIFY_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+verify_logger = logging.getLogger("verify_data")
+verify_logger.setLevel(logging.INFO)
+verify_logger.addHandler(logging.FileHandler(VERIFY_LOG_FILE))
 
 
 def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
@@ -92,14 +101,17 @@ def test(conn) -> None:
     return
 
 def verify_data(params: dict, ):
+    verify_logger.info(f"Verification Ran at {datetime.datetime.now()}")
     raw_studies = ctgov.fetch_all_pages(params)
     raw_studies = [r for r in raw_studies if r["hasResults"]]
     for raw in raw_studies:
         probelms = clean.check_ctgov_study(raw)
-        print("-------------- Study: ", raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId"), "--------------------")
+        nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
+        verify_logger.info(f"-------------- Study: {nct_id} --------------------")
         for p in probelms:
-            print(p)
-        print("")
+            verify_logger.info(p)
+        verify_logger.info("")
+    verify_logger.info("\n\n###########################################################################\n\n")
 
 def run():
     db.init_db()
