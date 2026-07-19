@@ -107,10 +107,21 @@ def test(conn) -> None:
     db.set_next_version_pointer(conn, after, prev)
     return
 
+def test_query(ctgov_query):
+    print("Using queries: ", ctgov_query)
+    with open(QUERIES_FILE) as f:
+        queries = yaml.safe_load(f)
+    
+    for uid,params in queries.items():
+        if uid == ctgov_query:    
+            verify_data(params)
+
 def verify_data(params: dict):
     verify_logger.info(f"Verification Ran at {datetime.datetime.now()}")
     raw_studies = ctgov.fetch_all_pages(params)
+    total = len(raw_studies)
     raw_studies = [r for r in raw_studies if r["hasResults"]]
+    verify_logger.info(f"{len(raw_studies)}/{total} studies were fetched with results.")
     for raw in raw_studies:
         probelms = ctgov_transform.check_study(raw)
         nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")

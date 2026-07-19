@@ -3,25 +3,6 @@
 # Keys map directly to CT.gov API v2 parameters.
 # See https://clinicaltrials.gov/data-api/api for the full reference.
 
-# oncology:
-#   query.cond: cancer
-
-# nsclc:
-#   # Phase 2 and 3 non-small cell lung cancer trials
-#   query.cond: >-
-#     stage 3 NSCLC OR stage III non-small cell lung cancer
-#     OR stage 3 non small cell lung cancer
-#   # filter.advanced: PHASE2 OR PHASE3
-
-# nsclc_adenocarcinoma:
-#   query.cond: >-
-#     non-small cell lung cancer OR NSCLC
-#   query.term: >-
-#     adenocarcinoma
-#   query.intr: >-
-#     targeted therapy OR precision medicine
-#   # filter.advanced: PHASE2
-
 nsclc_kras:
   query.cond: '"non-small cell lung cancer" OR NSCLC'
   query.intr: '"KRAS G12C inhibitor"'
@@ -37,7 +18,6 @@ nsclc_ppp:
   # excluded metastatic because I got a few extra good studies without it
   # query.outc: PFS OS
 
-# recruiting_diabetes:
-#   query.cond: diabetes
-#   filter.overallStatus: RECRUITING
-#   filter.advanced: PHASE2
+# tested, confirmed it fetches all 19 studies listed by id.
+EXAMPLE_seach_by_nct_id:
+  query.id: "NCT03976323 NCT04194944 NCT02142738 NCT06212752 NCT05775289 NCT05722015 NCT02220894 NCT03850444 NCT02578680 NCT03425643 NCT04956692 NCT03631199 NCT02591615 NCT04619797 NCT04524689 NCT05226598 NCT03950674 NCT03515837 NCT04222972"
