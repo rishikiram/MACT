@@ -111,7 +111,6 @@ def process_arm_groups(raw: dict) -> list[dict]:
     idx = 0
     for arm in arms:
         arm_group_rows.append({
-            "uid":      f"COMP-{nct_id}-{idx}",
             "nct_id":   nct_id,
             "group_code":   f"ARM{idx:03d}", 
             "title":	arm.get("label", "no data"),
@@ -214,6 +213,22 @@ def process_planned_outcomes(raw: dict) -> list[dict]:
         idx += 1
     return planned_outcome_rows
 
+def process_outcome_measures(raw: dict) -> list[dict]:
+    measures_rows = []
+    # nct_id = raw.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
+    outcomes = raw.get("resultsSection", {}).get("outcomeMeasuresModule", {}).get("outcomeMeasures", [])
+    for o in outcomes:
+        for c in o.get("classes", []):
+            for m in c.get("categories", [[]])[0].get("measurements", []):
+                measures_rows.append({
+                    "group_code":   m.get("groupId", "no data"),
+                    "value":        m.get("value", "no data"),
+                    "lower_limit":  m.get("lowerLimit", "no data"),
+                    "upper_limit":  m.get("upperLimit", "no data"),
+                    "denominator":  None  
+                })
+    return measures_rows
+
 # Scrape Events
 def process_events(raw: dict) -> list[dict]:
     # maybe in this function, I can check for whether event_groups allign with arm_groups or if they need to be reconciled.
@@ -293,6 +308,9 @@ def check_study(raw: dict) -> list:
     if unmapped_groups:
         log.append(f"[groups] {len(unmapped_groups)} group(s) unmapped: {unmapped_groups}")
 
+
+    # check if all redundant outcome groups are equivalent
+    # see lines 134-149
 
     ## CHECKING planned vs reported OUTCOMES
     # check if primary outcomes are consitently labeled primary outcomes.

@@ -53,6 +53,9 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
         
         outcomes = ctgov_transform.process_outcomes(raw)
         db.insert_outcomes(conn, outcomes)
+        # measures = ctgov_transform.process_outcome_measures(raw)
+        # for m in measures:
+        #     db.insert_and_link_outcome_measures(conn, m, nct_id, m["group_code"])
 
         events = ctgov_transform.process_events(raw)
         for e in events:
@@ -67,7 +70,6 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
             db.set_next_version_pointer(conn, original_id, updated_id)
 
         # population = process_population
-        # outcomes = process_outcomes
 
     # after = db.count()
     # print(f"[ingest] done — db grew from {before} → {after} studies")

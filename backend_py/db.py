@@ -7,7 +7,7 @@ DB_PATH = Path(__file__).parent.parent / "data" / "clinical_trials.db"
 
 
 
-TABLES_SCHEMA = f"""
+TABLES_SCHEMA = """
 CREATE TABLE IF NOT EXISTS studies (
     nct_id                  TEXT PRIMARY KEY,
     title                   TEXT,
@@ -62,9 +62,9 @@ CREATE TABLE IF NOT EXISTS queries (
 
 CREATE TABLE IF NOT EXISTS comparator_groups (
     id                      INTEGER PRIMARY KEY,
-    uid                     TEXT,
     nct_id                  TEXT,
     group_code              TEXT,
+    uid                     TEXT GENERATED ASLWAYS AS ('COMP-' || nct_id || '-' || group_code) VIRTUAL, 
     title                   TEXT,
     type                    TEXT,
     regimen                 TEXT,
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS comparator_groups (
     data_source             TEXT, -- should be in [design_arm, outcome_group, event_group]. redundant with group code techincally
 
     is_approved             BOOLEAN DEFAULT FALSE,
-        -- inked list to track edits or combine redundant groups. Most current should have next_version_id == NULL, 
+        -- linked list to track edits or combine redundant groups. Most current should have next_version_id == NULL, 
     next_version_id         INTEGER DEFAULT NULL,
     current_version_author  TEXT,   -- not sure this is necessary
 
@@ -140,6 +140,24 @@ CREATE TABLE IF NOT EXISTS reported_events (
         REFERENCES comparator_groups(id),
     FOREIGN KEY (adverse_event_id)
         REFERENCES adverse_events(id)
+);
+
+CREATE TABLE IF NOT EXISTS outcome_measures (
+    outcome_id              INTEGER,
+    comparator_group_id     INTEGER,
+    group_code	            TEXT,
+    -- analyses TODO add info here
+    denominator             INTEGER,
+    -- measures
+    value	                TEXT,
+    lower_limit	            TEXT,
+    upper_limit              TEXT,
+    
+    PRIMARY KEY (outcome_id, comparator_group_id),
+    FOREIGN KEY (comparator_group_id)
+        REFERENCES comparator_groups(id),
+    FOREIGN KEY (outcome_id)
+        REFERENCES outcomes(id)
 );
 """
 
@@ -211,7 +229,7 @@ def upsert_studies(conn, studies: list[dict], query: dict) -> int:
 
 def insert_comparator_groups(conn, comparator_groups: list[dict]) -> int:
     # Each dict: {uid, text}
-    allowed_cols = ("uid", "nct_id", "group_code", "title", "interventions", "regimen", "population_summary", "endpoint_summary", "is_approved", "next_version_id", "current_version_author")
+    allowed_cols = ("nct_id", "group_code", "title", "interventions", "regimen", "population_summary", "endpoint_summary", "is_approved", "next_version_id", "current_version_author")
     crsr = conn.cursor()
     for comparator in comparator_groups:
         row = {k: comparator[k] for k in allowed_cols if k in comparator}
@@ -294,6 +312,12 @@ def insert_and_link_adverse_events(conn, events: list[dict], nct_id: str, group_
 
     crsr.close()
     return len(events)
+
+def insert_and_link_outcome_measures(conn, measures:list[dict], nct_id: str, group_code: str) -> int:
+    #TODO: implememt. see table defined in schema, and ctgov_transform function process_outcome_measures.
+    #TODO: also, think about whether set_next_version_pointer should update the comparator_group_ids in outcome_measures and reported_events. 
+    #   Perhaps this should be a stored function? or some triggered event that runs when a comparator_group.next_version_id is changed.
+    return -1
 
 def get_most_recent_group_id(conn, nct_id: str, group_code: str) -> int:
     row = query(conn, "SELECT id, next_version_id FROM comparator_groups WHERE nct_id = ? AND group_code = ?", (nct_id, group_code))[0]
