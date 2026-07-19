@@ -42,6 +42,7 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
     query = {"uid":query_uid, "text":json.dumps(params)}
     db.insert_queries(conn, [query])
 
+    verify_logger.info("[info] Processing only studies with results.")
     raw_studies = [r for r in raw_studies if r["hasResults"]]
     for raw in raw_studies:
         # run verification function here
@@ -89,6 +90,7 @@ def ingest_ctgov_data(conn, query_uid: str, params: dict) -> None:
 #         conn.close()
 
 def test(conn) -> None:
+    # todo should change this function to log_ingestion and run it whenever a study is ingested.
     nct_ids = ["NCT03515837", "NCT03515837", "NCT03515837"]
     original_group_codes = ["OG001", "OG000", "ARM001"]
     updated_group_codes = ["ARM001", "ARM000", "ARM001"]
